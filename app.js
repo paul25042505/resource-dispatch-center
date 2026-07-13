@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.4",
+        notes: "入庫登錄新增「來源類型」欄位，區分🌐外部借入（跟外單位借，如302旅）與🏠自有物資（本單位既有的東西），物資總表的來源明細會顯示對應標籤。所有物資進出（入庫／領用／歸還）都會透過 Firestore transaction 自動配發全專案共用的流水單號，總表的來源明細與分配明細前面會標示單號方便查核追蹤。"
+    },
+    {
         version: "v0.0.3",
         notes: "大規模重構為「多專案階層式管理平台」：新增 Level 0 專案主控台（新增／刪除專案），點入專案後進入 Level 1，提供物資總表／進出作業／小組管理三大模組，並以左上角「返回主控台」按鈕確保導覽不迷路。小組管理整合了小組名單與快捷選取清單管理（皆已改為逐專案獨立）。啟用 Firebase 離線持久化，離線時頂端連線燈號改為紅色提示；新增手機下拉重新整理手勢，可手動強制向伺服器同步最新資料。所有資料讀取皆以 projects/{currentProjectId}/... 子集合隔離，切換專案或返回主控台時會正確取消先前的監聽，避免重複監聽。既有舊資料會自動搬遷進「既有資料」預設專案。程式碼拆分為 index.html + style.css + app.js。"
     },
@@ -207,7 +211,7 @@ async function addProject() {
 
 async function deleteProject(projectId, projectName) {
     if (!confirm(`確定刪除專案「${projectName}」？此專案底下所有物資、進出紀錄與小組資料都會一併刪除，且無法復原。`)) return;
-    const subcollections = ['sources', 'allocations', 'returns', 'groups', 'quickpicks', 'tasks'];
+    const subcollections = ['sources', 'allocations', 'returns', 'groups', 'quickpicks', 'tasks', 'meta'];
     try {
         for (const colName of subcollections) {
             const snap = await getDocs(collection(db, 'projects', projectId, colName));
@@ -452,6 +456,30 @@ async function moveQuickpick(category, docId, direction) {
     await updateDoc(doc(db, 'projects', currentProjectId, 'quickpicks', neighbor.docId), { order: current.order ?? 0 });
 }
 
+// ============ 全專案共用流水單號 ============
+// 入庫／領用／歸還共用同一組流水號，透過 transaction 保證多裝置同時送出時不會撞號。
+async function getNextSerialNumber() {
+    const counterRef = doc(db, 'projects', currentProjectId, 'meta', 'counter');
+    let nextSeq;
+    await runTransaction(db, async (tx) => {
+        const snap = await tx.get(counterRef);
+        const current = snap.exists() ? (snap.data().seq || 0) : 0;
+        nextSeq = current + 1;
+        tx.set(counterRef, { seq: nextSeq });
+    });
+    return nextSeq;
+}
+
+function formatSerial(seq) {
+    return seq ? '#' + String(seq).padStart(4, '0') : null;
+}
+
+function sourceTypeIcon(sourceType) {
+    if (sourceType === 'external') return '🌐';
+    if (sourceType === 'own') return '🏠';
+    return '📦';
+}
+
 // ============ 物資總表 ============
 function calculateAndRenderInventory() {
     const allItems = Array.from(new Set([...rawSources.map(s => s.item), ...rawAllocations.map(a => a.item), ...rawReturns.map(r => r.item)]));
@@ -471,13 +499,17 @@ function calculateAndRenderInventory() {
     allItems.forEach(itemName => {
         const itemSrcs = rawSources.filter(s => s.item === itemName);
         const totalA = itemSrcs.reduce((sum, s) => sum + s.qty, 0);
-        const detailsA = itemSrcs.map(s => `<span class="block text-xs text-[var(--brown-400)]">${escapeHtml(s.source)} : <b>${s.qty}</b> (${escapeHtml(s.method)})</span>`).join('');
+        const detailsA = itemSrcs.map(s => {
+            const serial = formatSerial(s.serial);
+            return `<span class="block text-xs text-[var(--brown-400)]">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${sourceTypeIcon(s.sourceType)} ${escapeHtml(s.source)} : <b>${s.qty}</b> (${escapeHtml(s.method)})</span>`;
+        }).join('');
 
         const itemAllocs = rawAllocations.filter(a => a.item === itemName);
         const totalB = itemAllocs.reduce((sum, a) => sum + a.qty, 0);
         const detailsB = itemAllocs.map(a => {
             const g = findGroupByStoredId(a.groupId);
-            return `<span class="block text-xs text-[var(--brown-400)]">${g ? escapeHtml(g.name) : '未知小組'} : <b>${a.qty}</b> (${escapeHtml(a.user)})</span>`;
+            const serial = formatSerial(a.serial);
+            return `<span class="block text-xs text-[var(--brown-400)]">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${g ? escapeHtml(g.name) : '未知小組'} : <b>${a.qty}</b> (${escapeHtml(a.user)})</span>`;
         }).join('');
 
         const totalC = rawReturns.filter(r => r.item === itemName).reduce((sum, r) => sum + r.qty, 0);
@@ -629,13 +661,15 @@ function bindGlobalEvents() {
     document.getElementById('btnSrcSubmit').onclick = async () => {
         if (!currentProjectId) return;
         const item = document.getElementById('srcItem').value.trim();
+        const sourceType = document.getElementById('srcType').value;
         const source = document.getElementById('srcUnit').value.trim();
         const qty = parseInt(document.getElementById('srcQty').value);
         const method = document.getElementById('srcMethod').value;
         const note = document.getElementById('srcNote').value.trim();
         if (!item || !source || isNaN(qty)) return alert("請完整填寫項目、來源與數量");
 
-        await addDoc(collection(db, 'projects', currentProjectId, 'sources'), { item, source, qty, method, note, timestamp: new Date() });
+        const serial = await getNextSerialNumber();
+        await addDoc(collection(db, 'projects', currentProjectId, 'sources'), { item, sourceType, source, qty, method, note, serial, timestamp: new Date() });
         await ensureQuickpick('item', item);
         await ensureQuickpick('source', source);
         document.getElementById('srcItem').value = ''; document.getElementById('srcQty').value = '';
@@ -649,7 +683,8 @@ function bindGlobalEvents() {
         const user = document.getElementById('allocUser').value.trim();
         if (!item || isNaN(qty) || !user) return alert("填寫不完整");
 
-        await addDoc(collection(db, 'projects', currentProjectId, 'allocations'), { item, groupId, qty, user, timestamp: new Date() });
+        const serial = await getNextSerialNumber();
+        await addDoc(collection(db, 'projects', currentProjectId, 'allocations'), { item, groupId, qty, user, serial, timestamp: new Date() });
         await ensureQuickpick('item', item);
         await ensureQuickpick('person', user);
         document.getElementById('allocItem').value = ''; document.getElementById('allocQty').value = '';
@@ -664,7 +699,8 @@ function bindGlobalEvents() {
         const note = document.getElementById('retNote').value.trim();
         if (!item || isNaN(qty) || !receiver) return alert("填寫不完整");
 
-        await addDoc(collection(db, 'projects', currentProjectId, 'returns'), { item, groupId, qty, receiver, note, timestamp: new Date() });
+        const serial = await getNextSerialNumber();
+        await addDoc(collection(db, 'projects', currentProjectId, 'returns'), { item, groupId, qty, receiver, note, serial, timestamp: new Date() });
         await ensureQuickpick('item', item);
         await ensureQuickpick('person', receiver);
         document.getElementById('retItem').value = ''; document.getElementById('retQty').value = '';
