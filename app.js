@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.20",
+        notes: "全站字體調整為更有空間感的排版：本文行高與字距加大、標題（含卡片標題）字距拉開展現氣勢。庫房剩餘大數字、總借入/已領/已還三格統計、各小組持有量膨囊裡的數量，改用細字重＋拉開字距的「數據感」樣式，跟一般文字做出區隔。所有按鈕（登錄借入、確認發放、新增小組等）改為方角＋雙框線的「硬派印章感」風格，取代原本的圓角實心按鈕。"
+    },
+    {
         version: "v0.0.19",
         notes: "小組底下新增「子位置」階層（辦公室、車輛等），可在「設定」頁點開每個小組新增/編輯/刪除/排序子位置。領用簽收與歸還登記選好小組後，若該小組有設定子位置，會多出一個可選填的子位置欄位。物資總表依小組篩選時，若該小組有子位置，會自動依子位置分別列出目前持有的物資（含「未指定子位置」），不再只看到庫房剩餘歸零就以為東西不見了；分配明細、領用/歸還紀錄與借用報表的逐筆明細也都會標示子位置。"
     },
@@ -798,7 +802,7 @@ function renderGroupHoldings() {
     const subLocs = getSubLocationsByGroup(groupId);
     wrap.classList.remove('hidden');
 
-    const renderChips = (holdings) => holdings.map(h => `<span class="text-xs font-bold bg-white border border-blue-200 text-blue-700 px-2.5 py-1.5 rounded-lg">${escapeHtml(h.item)} × ${h.qty}</span>`).join('');
+    const renderChips = (holdings) => holdings.map(h => `<span class="text-xs font-bold bg-white border border-blue-200 text-blue-700 px-2.5 py-1.5 rounded-lg">${escapeHtml(h.item)} × <b class="stat-value">${h.qty}</b></span>`).join('');
 
     // 小組沒有設定子位置：維持原本的單一清單顯示
     if (subLocs.length === 0) {
@@ -923,13 +927,13 @@ function calculateAndRenderInventory() {
         tableHtml += `
             <tr class="hover:bg-[var(--tan-100)]/60 transition-colors">
                 <td class="p-4 font-bold text-[var(--brown-900)]">${escapeHtml(itemName)}</td>
-                <td class="p-4 font-bold text-[var(--brown-800)]">${totalA}</td>
+                <td class="p-4 stat-value text-[var(--brown-800)]">${totalA}</td>
                 <td class="p-4">${detailsA || '-'}</td>
-                <td class="p-4 font-bold text-blue-700">${totalB}</td>
+                <td class="p-4 stat-value text-blue-700">${totalB}</td>
                 <td class="p-4">${detailsB || '-'}</td>
-                <td class="p-4 font-bold text-emerald-700">${totalC}</td>
+                <td class="p-4 stat-value text-emerald-700">${totalC}</td>
                 <td class="p-4 font-bold ${流浪中 > 0 ? 'text-rose-600' : 'text-[var(--brown-300)]'}">${流浪中}</td>
-                <td class="p-4 bg-[var(--brown-900)] text-[var(--cream)] font-black text-center text-base">${庫房剩餘}</td>
+                <td class="p-4 bg-[var(--brown-900)] text-[var(--cream)] stat-value text-center text-base">${庫房剩餘}</td>
             </tr>
         `;
 
@@ -937,17 +941,17 @@ function calculateAndRenderInventory() {
             <div class="p-4 space-y-2.5">
                 <div class="flex items-center justify-between gap-2">
                     <h4 class="font-black text-[var(--brown-900)] text-base">${escapeHtml(itemName)}</h4>
-                    <span class="bg-[var(--brown-900)] text-[var(--cream)] font-black text-lg px-3 py-1 rounded-lg shrink-0">${庫房剩餘}</span>
+                    <span class="bg-[var(--brown-900)] text-[var(--cream)] stat-value text-lg px-3 py-1 rounded-lg shrink-0">${庫房剩餘}</span>
                 </div>
                 <div class="grid grid-cols-3 gap-2 text-center text-xs">
                     <div class="bg-[var(--tan-100)] rounded-lg py-1.5 border border-[var(--tan-300)]">
-                        <div class="font-bold text-[var(--brown-800)]">${totalA}</div><div class="text-[var(--brown-400)]">總借入</div>
+                        <div class="stat-value text-[var(--brown-800)]">${totalA}</div><div class="text-[var(--brown-400)]">總借入</div>
                     </div>
                     <div class="bg-blue-50 rounded-lg py-1.5 border border-blue-100">
-                        <div class="font-bold text-blue-700">${totalB}</div><div class="text-blue-400">已領</div>
+                        <div class="stat-value text-blue-700">${totalB}</div><div class="text-blue-400">已領</div>
                     </div>
                     <div class="bg-emerald-50 rounded-lg py-1.5 border border-emerald-100">
-                        <div class="font-bold text-emerald-700">${totalC}</div><div class="text-emerald-400">已還</div>
+                        <div class="stat-value text-emerald-700">${totalC}</div><div class="text-emerald-400">已還</div>
                     </div>
                 </div>
                 ${流浪中 > 0 ? `<div class="text-xs font-bold text-rose-600">⚠️ 流浪中：尚有 ${流浪中} 件未歸還</div>` : ''}
