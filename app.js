@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.15",
+        notes: "物資總表新增「領用紀錄」與「歸還紀錄」兩份清單，跟入庫來源紀錄一樣逐筆列出、可點擊「⋮」編輯或刪除。三種紀錄的操作選單與底部彈出列已整合成共用機制，行為完全一致。"
+    },
+    {
         version: "v0.0.14",
         notes: "入庫登錄選擇「自有物資」時，不再需要（也不會顯示）借入方式欄位，因為自己單位既有的東西沒有書面借據或口頭刷臉的問題；總表與入庫來源紀錄也會相應省略該欄位顯示。數量欄位加上 inputmode=\"numeric\"，手機點擊時會直接跳出純數字鍵盤。登錄借入成功後會跳出「✅ 登錄完成」提示框。"
     },
@@ -322,12 +326,14 @@ function enterProject(projectId, projectName) {
         renderSourceLog();
     }, (err) => firestoreErrorMessage('讀取物資來源', err)));
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'allocations'), (snap) => {
-        rawAllocations = []; snap.forEach(d => rawAllocations.push(d.data()));
+        rawAllocations = []; snap.forEach(d => rawAllocations.push({ docId: d.id, ...d.data() }));
         calculateAndRenderInventory();
+        renderAllocationLog();
     }, (err) => firestoreErrorMessage('讀取領用紀錄', err)));
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'returns'), (snap) => {
-        rawReturns = []; snap.forEach(d => rawReturns.push(d.data()));
+        rawReturns = []; snap.forEach(d => rawReturns.push({ docId: d.id, ...d.data() }));
         calculateAndRenderInventory();
+        renderReturnLog();
     }, (err) => firestoreErrorMessage('讀取歸還紀錄', err)));
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'groups'), (snap) => {
         rawGroups = [];
@@ -384,10 +390,12 @@ function findGroupByStoredId(id) {
 }
 
 function renderGroupSelects() {
-    ['#allocGroup', '#retGroup'].forEach(selector => {
+    ['#allocGroup', '#retGroup', '#editAllocGroup', '#editRetGroup'].forEach(selector => {
         const el = document.querySelector(selector);
         if (!el) return;
+        const prevValue = el.value;
         el.innerHTML = rawGroups.map(g => `<option value="${g.docId}">${escapeHtml(g.name)}</option>`).join('');
+        if (rawGroups.some(g => g.docId === prevValue)) el.value = prevValue;
     });
 
     const filterEl = document.getElementById('invFilterGroup');
@@ -770,6 +778,29 @@ function formatTimestamp(ts) {
     return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// 每一筆入庫/領用/歸還紀錄的「⋮」都指向同一個底部操作選單（不會被清單捲動範圍裁切）
+function bindRecordMenuButtons() {
+    document.querySelectorAll('.record-menu-btn').forEach(btn => {
+        btn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openRecordActionSheet(btn.dataset.collection, btn.dataset.id);
+        };
+    });
+}
+
+let actionSheetTarget = null; // { collection: 'sources'|'allocations'|'returns', docId }
+
+function openRecordActionSheet(collectionName, docId) {
+    actionSheetTarget = { collection: collectionName, docId };
+    document.getElementById('recordActionSheet').classList.remove('hidden');
+}
+
+function closeRecordActionSheet() {
+    actionSheetTarget = null;
+    document.getElementById('recordActionSheet').classList.add('hidden');
+}
+
 function renderSourceLog() {
     const el = document.getElementById('sourceLog');
     if (!el) return;
@@ -789,7 +820,7 @@ function renderSourceLog() {
                     <span class="font-bold text-[var(--brown-900)] text-sm truncate">${serial ? `<span class="text-[var(--brown-400)] font-normal">${serial}</span> ` : ''}${escapeHtml(s.item)}</span>
                     <span class="flex items-center gap-1.5 shrink-0">
                         <span class="text-xs text-[var(--brown-500)] font-bold">x${s.qty} ▾</span>
-                        <button type="button" class="src-menu-btn qp-icon-btn text-[var(--brown-500)]" data-id="${s.docId}">⋮</button>
+                        <button type="button" class="record-menu-btn qp-icon-btn text-[var(--brown-500)]" data-collection="sources" data-id="${s.docId}">⋮</button>
                     </span>
                 </summary>
                 <div class="px-4 pb-3 text-xs text-[var(--brown-500)] space-y-1">
@@ -802,26 +833,76 @@ function renderSourceLog() {
         `;
     }).join('');
 
-    document.querySelectorAll('.src-menu-btn').forEach(btn => {
-        btn.onclick = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            openSourceActionSheet(btn.dataset.id);
-        };
-    });
+    bindRecordMenuButtons();
 }
 
-// 選單目前對應的入庫紀錄 docId（底部操作列共用，不會因清單捲動範圍而被裁切）
-let sourceActionSheetTargetId = null;
+function renderAllocationLog() {
+    const el = document.getElementById('allocationLog');
+    if (!el) return;
 
-function openSourceActionSheet(docId) {
-    sourceActionSheetTargetId = docId;
-    document.getElementById('sourceActionSheet').classList.remove('hidden');
+    if (rawAllocations.length === 0) {
+        el.innerHTML = `<div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">目前尚無領用紀錄。</div>`;
+        return;
+    }
+
+    const sorted = [...rawAllocations].sort((a, b) => (b.serial ?? 0) - (a.serial ?? 0));
+    el.innerHTML = sorted.map(a => {
+        const serial = formatSerial(a.serial);
+        const g = findGroupByStoredId(a.groupId);
+        return `
+            <details>
+                <summary class="px-4 py-3 min-h-[44px] flex items-center justify-between gap-2 cursor-pointer select-none">
+                    <span class="font-bold text-[var(--brown-900)] text-sm truncate">${serial ? `<span class="text-[var(--brown-400)] font-normal">${serial}</span> ` : ''}${escapeHtml(a.item)}</span>
+                    <span class="flex items-center gap-1.5 shrink-0">
+                        <span class="text-xs text-[var(--brown-500)] font-bold">x${a.qty} ▾</span>
+                        <button type="button" class="record-menu-btn qp-icon-btn text-[var(--brown-500)]" data-collection="allocations" data-id="${a.docId}">⋮</button>
+                    </span>
+                </summary>
+                <div class="px-4 pb-3 text-xs text-[var(--brown-500)] space-y-1">
+                    <div>👥 小組：${g ? escapeHtml(g.name) : '未知小組'}</div>
+                    <div>🖊️ 領用人：${escapeHtml(a.user)}</div>
+                    <div>🕒 登錄時間：${formatTimestamp(a.timestamp)}</div>
+                </div>
+            </details>
+        `;
+    }).join('');
+
+    bindRecordMenuButtons();
 }
 
-function closeSourceActionSheet() {
-    sourceActionSheetTargetId = null;
-    document.getElementById('sourceActionSheet').classList.add('hidden');
+function renderReturnLog() {
+    const el = document.getElementById('returnLog');
+    if (!el) return;
+
+    if (rawReturns.length === 0) {
+        el.innerHTML = `<div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">目前尚無歸還紀錄。</div>`;
+        return;
+    }
+
+    const sorted = [...rawReturns].sort((a, b) => (b.serial ?? 0) - (a.serial ?? 0));
+    el.innerHTML = sorted.map(r => {
+        const serial = formatSerial(r.serial);
+        const g = findGroupByStoredId(r.groupId);
+        return `
+            <details>
+                <summary class="px-4 py-3 min-h-[44px] flex items-center justify-between gap-2 cursor-pointer select-none">
+                    <span class="font-bold text-[var(--brown-900)] text-sm truncate">${serial ? `<span class="text-[var(--brown-400)] font-normal">${serial}</span> ` : ''}${escapeHtml(r.item)}</span>
+                    <span class="flex items-center gap-1.5 shrink-0">
+                        <span class="text-xs text-[var(--brown-500)] font-bold">x${r.qty} ▾</span>
+                        <button type="button" class="record-menu-btn qp-icon-btn text-[var(--brown-500)]" data-collection="returns" data-id="${r.docId}">⋮</button>
+                    </span>
+                </summary>
+                <div class="px-4 pb-3 text-xs text-[var(--brown-500)] space-y-1">
+                    <div>👥 小組：${g ? escapeHtml(g.name) : '未知小組'}</div>
+                    <div>🖊️ 點收人：${escapeHtml(r.receiver)}</div>
+                    <div>📝 備註：${r.note ? escapeHtml(r.note) : '-'}</div>
+                    <div>🕒 登錄時間：${formatTimestamp(r.timestamp)}</div>
+                </div>
+            </details>
+        `;
+    }).join('');
+
+    bindRecordMenuButtons();
 }
 
 let editingSourceId = null;
@@ -878,6 +959,76 @@ async function saveEditedSource() {
     try {
         await updateDoc(doc(db, 'projects', currentProjectId, 'sources', editingSourceId), { item, sourceType, source, qty, method, note });
         closeEditSourceModal();
+    } catch (err) {
+        alert(firestoreErrorMessage('儲存修改', err));
+    }
+}
+
+let editingAllocationId = null;
+
+function openEditAllocationModal(docId) {
+    const rec = rawAllocations.find(a => a.docId === docId);
+    if (!rec) return;
+    editingAllocationId = docId;
+    document.getElementById('editAllocItem').value = rec.item || '';
+    document.getElementById('editAllocGroup').value = String(rec.groupId ?? '');
+    document.getElementById('editAllocQty').value = rec.qty ?? '';
+    document.getElementById('editAllocUser').value = rec.user || '';
+    document.getElementById('editAllocationModal').classList.remove('hidden');
+}
+
+function closeEditAllocationModal() {
+    editingAllocationId = null;
+    document.getElementById('editAllocationModal').classList.add('hidden');
+}
+
+async function saveEditedAllocation() {
+    if (!editingAllocationId || !currentProjectId) return;
+    const item = document.getElementById('editAllocItem').value.trim();
+    const groupId = document.getElementById('editAllocGroup').value;
+    const qty = parseInt(document.getElementById('editAllocQty').value);
+    const user = document.getElementById('editAllocUser').value.trim();
+    if (!item || isNaN(qty) || !user) return alert('填寫不完整');
+
+    try {
+        await updateDoc(doc(db, 'projects', currentProjectId, 'allocations', editingAllocationId), { item, groupId, qty, user });
+        closeEditAllocationModal();
+    } catch (err) {
+        alert(firestoreErrorMessage('儲存修改', err));
+    }
+}
+
+let editingReturnId = null;
+
+function openEditReturnModal(docId) {
+    const rec = rawReturns.find(r => r.docId === docId);
+    if (!rec) return;
+    editingReturnId = docId;
+    document.getElementById('editRetItem').value = rec.item || '';
+    document.getElementById('editRetGroup').value = String(rec.groupId ?? '');
+    document.getElementById('editRetQty').value = rec.qty ?? '';
+    document.getElementById('editRetReceiver').value = rec.receiver || '';
+    document.getElementById('editRetNote').value = rec.note || '';
+    document.getElementById('editReturnModal').classList.remove('hidden');
+}
+
+function closeEditReturnModal() {
+    editingReturnId = null;
+    document.getElementById('editReturnModal').classList.add('hidden');
+}
+
+async function saveEditedReturn() {
+    if (!editingReturnId || !currentProjectId) return;
+    const item = document.getElementById('editRetItem').value.trim();
+    const groupId = document.getElementById('editRetGroup').value;
+    const qty = parseInt(document.getElementById('editRetQty').value);
+    const receiver = document.getElementById('editRetReceiver').value.trim();
+    const note = document.getElementById('editRetNote').value.trim();
+    if (!item || isNaN(qty) || !receiver) return alert('填寫不完整');
+
+    try {
+        await updateDoc(doc(db, 'projects', currentProjectId, 'returns', editingReturnId), { item, groupId, qty, receiver, note });
+        closeEditReturnModal();
     } catch (err) {
         alert(firestoreErrorMessage('儲存修改', err));
     }
@@ -975,25 +1126,43 @@ function bindGlobalEvents() {
     });
     document.getElementById('btnSaveEditSource').onclick = saveEditedSource;
 
-    document.getElementById('btnSourceMenuCancel').onclick = closeSourceActionSheet;
-    document.getElementById('sourceActionSheet').addEventListener('click', (e) => {
-        if (e.target.id === 'sourceActionSheet') closeSourceActionSheet();
+    document.getElementById('btnCloseEditAllocation').onclick = closeEditAllocationModal;
+    document.getElementById('editAllocationModal').addEventListener('click', (e) => {
+        if (e.target.id === 'editAllocationModal') closeEditAllocationModal();
     });
-    document.getElementById('btnSourceMenuEdit').onclick = () => {
-        const docId = sourceActionSheetTargetId;
-        closeSourceActionSheet();
-        if (docId) openEditSourceModal(docId);
+    document.getElementById('btnSaveEditAllocation').onclick = saveEditedAllocation;
+
+    document.getElementById('btnCloseEditReturn').onclick = closeEditReturnModal;
+    document.getElementById('editReturnModal').addEventListener('click', (e) => {
+        if (e.target.id === 'editReturnModal') closeEditReturnModal();
+    });
+    document.getElementById('btnSaveEditReturn').onclick = saveEditedReturn;
+
+    document.getElementById('btnRecordMenuCancel').onclick = closeRecordActionSheet;
+    document.getElementById('recordActionSheet').addEventListener('click', (e) => {
+        if (e.target.id === 'recordActionSheet') closeRecordActionSheet();
+    });
+    document.getElementById('btnRecordMenuEdit').onclick = () => {
+        const target = actionSheetTarget;
+        closeRecordActionSheet();
+        if (!target) return;
+        if (target.collection === 'sources') openEditSourceModal(target.docId);
+        else if (target.collection === 'allocations') openEditAllocationModal(target.docId);
+        else if (target.collection === 'returns') openEditReturnModal(target.docId);
     };
-    document.getElementById('btnSourceMenuDelete').onclick = async () => {
-        const docId = sourceActionSheetTargetId;
-        closeSourceActionSheet();
-        if (!docId) return;
-        const rec = rawSources.find(s => s.docId === docId);
-        if (!confirm(`確定刪除這筆入庫紀錄？${rec ? `（${rec.item} x${rec.qty}）` : ''}此動作無法復原。`)) return;
+    document.getElementById('btnRecordMenuDelete').onclick = async () => {
+        const target = actionSheetTarget;
+        closeRecordActionSheet();
+        if (!target || !currentProjectId) return;
+        const labels = { sources: '入庫', allocations: '領用', returns: '歸還' };
+        const rawByCollection = { sources: rawSources, allocations: rawAllocations, returns: rawReturns };
+        const rec = rawByCollection[target.collection]?.find(r => r.docId === target.docId);
+        const label = labels[target.collection] || '';
+        if (!confirm(`確定刪除這筆${label}紀錄？${rec ? `（${rec.item} x${rec.qty}）` : ''}此動作無法復原。`)) return;
         try {
-            await deleteDoc(doc(db, 'projects', currentProjectId, 'sources', docId));
+            await deleteDoc(doc(db, 'projects', currentProjectId, target.collection, target.docId));
         } catch (err) {
-            alert(firestoreErrorMessage('刪除入庫紀錄', err));
+            alert(firestoreErrorMessage(`刪除${label}紀錄`, err));
         }
     };
 
