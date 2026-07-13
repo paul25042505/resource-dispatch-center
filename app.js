@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.13",
+        notes: "修正編輯入庫紀錄時，把修正過的物品/來源文字誤加進設定頁快捷選取清單的問題。編輯單純是修正錯字或調整既有紀錄，不應該產生新的快捷選項；只有新增入庫/領用/歸還時才會自動記錄快捷選項。"
+    },
+    {
         version: "v0.0.12",
         notes: "手機下拉重新整理手勢改為直接重新載入整個網頁（window.location.reload），取代原本只在背景靜默同步 Firestore 資料的方式，行為更符合一般下拉刷新的預期。"
     },
@@ -847,8 +851,6 @@ async function saveEditedSource() {
 
     try {
         await updateDoc(doc(db, 'projects', currentProjectId, 'sources', editingSourceId), { item, sourceType, source, qty, method, note });
-        await ensureQuickpick('item', item);
-        await ensureQuickpick('source', source);
         closeEditSourceModal();
     } catch (err) {
         alert(firestoreErrorMessage('儲存修改', err));
