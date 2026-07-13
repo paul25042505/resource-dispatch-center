@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.14",
+        notes: "入庫登錄選擇「自有物資」時，不再需要（也不會顯示）借入方式欄位，因為自己單位既有的東西沒有書面借據或口頭刷臉的問題；總表與入庫來源紀錄也會相應省略該欄位顯示。數量欄位加上 inputmode=\"numeric\"，手機點擊時會直接跳出純數字鍵盤。登錄借入成功後會跳出「✅ 登錄完成」提示框。"
+    },
+    {
         version: "v0.0.13",
         notes: "修正編輯入庫紀錄時，把修正過的物品/來源文字誤加進設定頁快捷選取清單的問題。編輯單純是修正錯字或調整既有紀錄，不應該產生新的快捷選項；只有新增入庫/領用/歸還時才會自動記錄快捷選項。"
     },
@@ -134,6 +138,21 @@ window.addEventListener('offline', updateConnectionStatusUI);
 
 function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+let toastTimer = null;
+function showToast(message) {
+    const el = document.getElementById('toast');
+    const msgEl = document.getElementById('toastMessage');
+    if (!el || !msgEl) return;
+    msgEl.textContent = message;
+    el.classList.remove('hidden');
+    el.style.opacity = '1';
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+        el.style.opacity = '0';
+        setTimeout(() => el.classList.add('hidden'), 300);
+    }, 1800);
 }
 
 // ============ 連線狀態 ============
@@ -679,7 +698,7 @@ function calculateAndRenderInventory() {
         const detailsA = itemSrcs.map(s => {
             const serial = formatSerial(s.serial);
             const sourceLabel = s.sourceType === 'own' ? '存放位置' : '來源';
-            return `<span class="block text-xs text-[var(--brown-400)]">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}<b class="text-[var(--brown-600)]">${escapeHtml(itemName)}</b> ${sourceTypeIcon(s.sourceType)} ${sourceLabel}：${escapeHtml(s.source)} : <b>${s.qty}</b> (${escapeHtml(s.method)})</span>`;
+            return `<span class="block text-xs text-[var(--brown-400)]">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}<b class="text-[var(--brown-600)]">${escapeHtml(itemName)}</b> ${sourceTypeIcon(s.sourceType)} ${sourceLabel}：${escapeHtml(s.source)} : <b>${s.qty}</b>${s.method ? ` (${escapeHtml(s.method)})` : ''}</span>`;
         }).join('');
 
         const itemAllocs = rawAllocations.filter(a => a.item === itemName);
@@ -775,7 +794,7 @@ function renderSourceLog() {
                 </summary>
                 <div class="px-4 pb-3 text-xs text-[var(--brown-500)] space-y-1">
                     <div>${sourceTypeIcon(s.sourceType)} ${sourceLabel}：${escapeHtml(s.source)}</div>
-                    <div>📜 借入方式：${escapeHtml(s.method)}</div>
+                    ${s.method ? `<div>📜 借入方式：${escapeHtml(s.method)}</div>` : ''}
                     <div>📝 備註：${s.note ? escapeHtml(s.note) : '-'}</div>
                     <div>🕒 登錄時間：${formatTimestamp(s.timestamp)}</div>
                 </div>
@@ -807,14 +826,21 @@ function closeSourceActionSheet() {
 
 let editingSourceId = null;
 
+function updateMethodWrapVisibility(wrapId, sourceType) {
+    const wrap = document.getElementById(wrapId);
+    if (wrap) wrap.classList.toggle('hidden', sourceType === 'own');
+}
+
 function openEditSourceModal(docId) {
     const rec = rawSources.find(s => s.docId === docId);
     if (!rec) return;
     editingSourceId = docId;
     document.getElementById('editSrcItem').value = rec.item || '';
-    document.getElementById('editSrcType').value = rec.sourceType === 'own' ? 'own' : 'external';
+    const sourceType = rec.sourceType === 'own' ? 'own' : 'external';
+    document.getElementById('editSrcType').value = sourceType;
     document.getElementById('editSrcUnit').value = rec.source || '';
     document.getElementById('editSrcQty').value = rec.qty ?? '';
+    updateMethodWrapVisibility('editSrcMethodWrap', sourceType);
 
     const knownMethods = ['借據', '刷臉'];
     const methodOtherInput = document.getElementById('editSrcMethodOther');
@@ -825,7 +851,7 @@ function openEditSourceModal(docId) {
     } else {
         document.getElementById('editSrcMethod').value = '其他';
         methodOtherInput.value = rec.method || '';
-        methodOtherInput.classList.remove('hidden');
+        methodOtherInput.classList.toggle('hidden', sourceType === 'own' || !rec.method);
     }
     document.getElementById('editSrcNote').value = rec.note || '';
     document.getElementById('editSourceModal').classList.remove('hidden');
@@ -844,10 +870,10 @@ async function saveEditedSource() {
     const qty = parseInt(document.getElementById('editSrcQty').value);
     const methodSelect = document.getElementById('editSrcMethod').value;
     const methodOther = document.getElementById('editSrcMethodOther').value.trim();
-    const method = methodSelect === '其他' ? methodOther : methodSelect;
+    const method = sourceType === 'own' ? '' : (methodSelect === '其他' ? methodOther : methodSelect);
     const note = document.getElementById('editSrcNote').value.trim();
     if (!item || !source || isNaN(qty)) return alert('請完整填寫項目、來源與數量');
-    if (methodSelect === '其他' && !methodOther) return alert('請填寫「其他」借入方式的說明');
+    if (sourceType !== 'own' && methodSelect === '其他' && !methodOther) return alert('請填寫「其他」借入方式的說明');
 
     try {
         await updateDoc(doc(db, 'projects', currentProjectId, 'sources', editingSourceId), { item, sourceType, source, qty, method, note });
@@ -944,6 +970,9 @@ function bindGlobalEvents() {
     document.getElementById('editSrcMethod').addEventListener('change', (e) => {
         document.getElementById('editSrcMethodOther').classList.toggle('hidden', e.target.value !== '其他');
     });
+    document.getElementById('editSrcType').addEventListener('change', (e) => {
+        updateMethodWrapVisibility('editSrcMethodWrap', e.target.value);
+    });
     document.getElementById('btnSaveEditSource').onclick = saveEditedSource;
 
     document.getElementById('btnSourceMenuCancel').onclick = closeSourceActionSheet;
@@ -980,6 +1009,7 @@ function bindGlobalEvents() {
     document.getElementById('srcType').addEventListener('change', (e) => {
         const input = document.getElementById('srcUnit');
         input.placeholder = e.target.value === 'own' ? '存放位置(如:衛生器材室、A棟2樓)' : '外部單位名稱(如:302旅)';
+        updateMethodWrapVisibility('srcMethodWrap', e.target.value);
     });
 
     document.getElementById('allocItem').addEventListener('input', updateAllocStockHint);
@@ -997,10 +1027,10 @@ function bindGlobalEvents() {
         const qty = parseInt(document.getElementById('srcQty').value);
         const methodSelect = document.getElementById('srcMethod').value;
         const methodOther = document.getElementById('srcMethodOther').value.trim();
-        const method = methodSelect === '其他' ? methodOther : methodSelect;
+        const method = sourceType === 'own' ? '' : (methodSelect === '其他' ? methodOther : methodSelect);
         const note = document.getElementById('srcNote').value.trim();
         if (!item || !source || isNaN(qty)) return alert("請完整填寫項目、來源與數量");
-        if (methodSelect === '其他' && !methodOther) return alert("請填寫「其他」借入方式的說明");
+        if (sourceType !== 'own' && methodSelect === '其他' && !methodOther) return alert("請填寫「其他」借入方式的說明");
 
         const serial = await getNextSerialNumber();
         await addDoc(collection(db, 'projects', currentProjectId, 'sources'), { item, sourceType, source, qty, method, note, serial, timestamp: new Date() });
@@ -1009,6 +1039,7 @@ function bindGlobalEvents() {
         document.getElementById('srcItem').value = ''; document.getElementById('srcQty').value = '';
         document.getElementById('srcMethodOther').value = ''; document.getElementById('srcMethodOther').classList.add('hidden');
         document.getElementById('srcMethod').value = '借據';
+        showToast('✅ 登錄完成');
     };
 
     document.getElementById('btnAllocSubmit').onclick = async () => {

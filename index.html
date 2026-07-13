@@ -58,6 +58,10 @@ v0.0.12 - 手機下拉重新整理手勢改為直接重新載入整個網頁（w
 v0.0.13 - 修正編輯入庫紀錄時，把修正過的物品/來源文字誤加進設定頁快捷選取清單的
           問題。編輯單純是修正錯字或調整既有紀錄，不應該產生新的快捷選項；只有
           新增入庫/領用/歸還時才會自動記錄快捷選項。
+v0.0.14 - 入庫登錄選擇「自有物資」時，不再需要（也不會顯示）借入方式欄位，因為
+          自己單位既有的東西沒有書面借據或口頭刷臉的問題；總表與入庫來源紀錄也
+          會相應省略該欄位顯示。數量欄位加上 inputmode="numeric"，手機點擊時會
+          直接跳出純數字鍵盤。登錄借入成功後會跳出「✅ 登錄完成」提示框。
 -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -73,6 +77,11 @@ v0.0.13 - 修正編輯入庫紀錄時，把修正過的物品/來源文字誤加
 <!-- 下拉重新整理指示器 -->
 <div id="ptrIndicator">🔄</div>
 
+<!-- 操作完成提示框 -->
+<div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 z-[60] bg-[var(--brown-900)] text-[var(--cream)] px-5 py-3 rounded-xl shadow-lg text-sm font-bold flex items-center gap-2 transition-opacity duration-300">
+    <span id="toastMessage"></span>
+</div>
+
 <div class="max-w-6xl mx-auto p-3 md:p-6 space-y-4 md:space-y-6 pb-28 md:pb-10">
 
     <header class="relative overflow-hidden bg-gradient-to-br from-[var(--brown-900)] via-[var(--brown-800)] to-[var(--brown-700)] text-[var(--cream)] rounded-2xl px-5 py-6 shadow-lg flex flex-col md:flex-row justify-between items-center gap-3 border border-[var(--brown-900)]">
@@ -87,7 +96,7 @@ v0.0.13 - 修正編輯入庫紀錄時，把修正過的物品/來源文字誤加
                 <span id="connDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span id="connText">雲端資料庫已連線</span>
             </div>
-            <button id="btnShowChangelog" class="version-badge px-2 py-1 rounded-md hover:brightness-95">v0.0.13</button>
+            <button id="btnShowChangelog" class="version-badge px-2 py-1 rounded-md hover:brightness-95">v0.0.14</button>
         </div>
     </header>
 
@@ -129,8 +138,8 @@ v0.0.13 - 修正編輯入庫紀錄時，把修正過的物品/來源文字誤加
                     <option value="own">🏠 自有物資（本單位既有）</option>
                 </select>
                 <input type="text" id="editSrcUnit" placeholder="外部單位名稱/存放位置" class="field">
-                <input type="number" id="editSrcQty" placeholder="數量" min="1" class="field">
-                <div>
+                <input type="number" inputmode="numeric" id="editSrcQty" placeholder="數量" min="1" class="field">
+                <div id="editSrcMethodWrap">
                     <select id="editSrcMethod" class="field">
                         <option value="借據">📜 書面借據</option>
                         <option value="刷臉">👤 口頭刷臉</option>
@@ -253,8 +262,8 @@ v0.0.13 - 修正編輯入庫紀錄時，把修正過的物品/來源文字誤加
                         <input type="text" id="srcUnit" placeholder="外部單位名稱(如:302旅)" class="field">
                         <select id="qpSelect-srcUnit" class="field mt-1.5"></select>
                     </div>
-                    <input type="number" id="srcQty" placeholder="數量" min="1" class="field">
-                    <div>
+                    <input type="number" inputmode="numeric" id="srcQty" placeholder="數量" min="1" class="field">
+                    <div id="srcMethodWrap">
                         <select id="srcMethod" class="field">
                             <option value="借據">📜 書面借據</option>
                             <option value="刷臉">👤 口頭刷臉</option>
@@ -278,7 +287,7 @@ v0.0.13 - 修正編輯入庫紀錄時，把修正過的物品/來源文字誤加
                         <p id="allocItemStock" class="text-xs font-bold mt-1.5 min-h-[1em]"></p>
                     </div>
                     <select id="allocGroup" class="field"></select>
-                    <input type="number" id="allocQty" placeholder="數量" min="1" class="field">
+                    <input type="number" inputmode="numeric" id="allocQty" placeholder="數量" min="1" class="field">
                     <div>
                         <input type="text" id="allocUser" placeholder="領用人簽名" class="field">
                         <select id="qpSelect-allocUser" class="field mt-1.5"></select>
@@ -297,7 +306,7 @@ v0.0.13 - 修正編輯入庫紀錄時，把修正過的物品/來源文字誤加
                         <select id="qpSelect-retItem" class="field mt-1.5"></select>
                     </div>
                     <select id="retGroup" class="field"></select>
-                    <input type="number" id="retQty" placeholder="數量" min="1" class="field">
+                    <input type="number" inputmode="numeric" id="retQty" placeholder="數量" min="1" class="field">
                     <div>
                         <input type="text" id="retReceiver" placeholder="收回點收人" class="field">
                         <select id="qpSelect-retReceiver" class="field mt-1.5"></select>
