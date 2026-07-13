@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.8",
+        notes: "物資總表新增篩選列：可依物品名稱關鍵字搜尋，或選擇小組直接列出該小組目前持有中（已領未還）的所有物品與數量。底部導覽列的「小組管理」分頁改名為「設定」；快捷選取清單管理的物品／來源單位／經辦人員三個分類改為可收合卡片，預設收合並顯示項目數量，點開才看到完整清單與新增/編輯/刪除/排序，避免清單越加越長讓頁面過度冗長。"
+    },
+    {
         version: "v0.0.7",
         notes: "物品／來源單位／經辦人員的快捷選取，由按鈕列改為下拉選單，物品類的選單會在每個選項後面附註「（庫房剩餘：X 件）」，選取前就能比較各物品的庫存量。入庫登錄的來源欄位改為依「來源類型」動態顯示：外部借入顯示「外部單位名稱」，自有物資則顯示「存放位置」，物資總表的來源明細也會標示對應的存放位置／來源文字，方便日後尋找自有物資的實際擺放處。"
     },
@@ -346,6 +350,14 @@ function renderGroupSelects() {
         if (!el) return;
         el.innerHTML = rawGroups.map(g => `<option value="${g.docId}">${escapeHtml(g.name)}</option>`).join('');
     });
+
+    const filterEl = document.getElementById('invFilterGroup');
+    if (filterEl) {
+        const prevValue = filterEl.value;
+        filterEl.innerHTML = `<option value="">👥 依小組查看目前持有物資...</option>` +
+            rawGroups.map(g => `<option value="${g.docId}">${escapeHtml(g.name)}</option>`).join('');
+        if (rawGroups.some(g => g.docId === prevValue)) filterEl.value = prevValue;
+    }
 }
 
 function renderGroupSettings() {
@@ -447,6 +459,9 @@ function renderQuickpickSettings() {
         if (!listEl) return;
         const items = quickpicksByCategory(category);
 
+        const countEl = document.getElementById(`qpCount-${category}`);
+        if (countEl) countEl.textContent = `${items.length} 項 ▾`;
+
         if (items.length === 0) {
             listEl.innerHTML = `<div class="text-xs text-[var(--brown-300)] py-2">尚無快捷選項，新增後會出現在這裡。</div>`;
             return;
@@ -536,6 +551,41 @@ function getGroupOutstanding(itemName, groupId) {
     return allocated - returned;
 }
 
+// 某小組目前持有中（已領未還）的所有物品清單
+function getGroupHoldings(groupId) {
+    const allItems = Array.from(new Set([...rawAllocations.map(a => a.item), ...rawReturns.map(r => r.item)]));
+    return allItems
+        .map(item => ({ item, qty: getGroupOutstanding(item, groupId) }))
+        .filter(x => x.qty > 0);
+}
+
+function renderGroupHoldings() {
+    const select = document.getElementById('invFilterGroup');
+    const wrap = document.getElementById('invGroupHoldings');
+    if (!select || !wrap) return;
+    const groupId = select.value;
+    if (!groupId) { wrap.classList.add('hidden'); wrap.innerHTML = ''; return; }
+
+    const g = findGroupByStoredId(groupId);
+    const groupLabel = g ? g.name : '此小組';
+    const holdings = getGroupHoldings(groupId);
+    wrap.classList.remove('hidden');
+
+    if (holdings.length === 0) {
+        wrap.innerHTML = `<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700">🧑‍🤝‍🧑 ${escapeHtml(groupLabel)} 目前沒有持有中的物資。</div>`;
+        return;
+    }
+
+    wrap.innerHTML = `
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
+            <p class="text-sm font-bold text-blue-800">🧑‍🤝‍🧑 ${escapeHtml(groupLabel)} 目前持有物資</p>
+            <div class="flex flex-wrap gap-2">
+                ${holdings.map(h => `<span class="text-xs font-bold bg-white border border-blue-200 text-blue-700 px-2.5 py-1.5 rounded-lg">${escapeHtml(h.item)} × ${h.qty}</span>`).join('')}
+            </div>
+        </div>
+    `;
+}
+
 function updateAllocStockHint() {
     const el = document.getElementById('allocItemStock');
     if (!el) return;
@@ -583,13 +633,27 @@ function calculateAndRenderInventory() {
         updateAllocStockHint();
         updateRetOutstandingHint();
         renderAllChips();
+        renderGroupHoldings();
+        return;
+    }
+
+    const filterText = (document.getElementById('invFilterItem')?.value || '').trim();
+    const displayItems = filterText ? allItems.filter(name => name.includes(filterText)) : allItems;
+
+    if (displayItems.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-[var(--brown-300)] font-medium">沒有符合「${escapeHtml(filterText)}」的物品。</td></tr>`;
+        cardsWrap.innerHTML = `<div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">沒有符合「${escapeHtml(filterText)}」的物品。</div>`;
+        updateAllocStockHint();
+        updateRetOutstandingHint();
+        renderAllChips();
+        renderGroupHoldings();
         return;
     }
 
     let tableHtml = "";
     let cardsHtml = "";
 
-    allItems.forEach(itemName => {
+    displayItems.forEach(itemName => {
         const itemSrcs = rawSources.filter(s => s.item === itemName);
         const totalA = itemSrcs.reduce((sum, s) => sum + s.qty, 0);
         const detailsA = itemSrcs.map(s => {
@@ -655,6 +719,7 @@ function calculateAndRenderInventory() {
     updateAllocStockHint();
     updateRetOutstandingHint();
     renderAllChips();
+    renderGroupHoldings();
 }
 
 // 全新的入庫來源交易紀錄：以個別入庫事件（而非依物品彙總）列出，預設只顯示物品名稱與
@@ -814,6 +879,9 @@ function bindGlobalEvents() {
     document.getElementById('allocItem').addEventListener('input', updateAllocStockHint);
     document.getElementById('retItem').addEventListener('input', updateRetOutstandingHint);
     document.getElementById('retGroup').addEventListener('change', updateRetOutstandingHint);
+
+    document.getElementById('invFilterItem').addEventListener('input', calculateAndRenderInventory);
+    document.getElementById('invFilterGroup').addEventListener('change', renderGroupHoldings);
 
     document.getElementById('btnSrcSubmit').onclick = async () => {
         if (!currentProjectId) return;
