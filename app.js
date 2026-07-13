@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.9",
+        notes: "瀏覽畫面停用手機的雙指縮放/放大手勢，操作更像原生 App。物資總表卡片的來源明細，在🌐/🏠圖示前面補上物品名稱，跟入庫來源紀錄的呈現方式一致。"
+    },
+    {
         version: "v0.0.8",
         notes: "物資總表新增篩選列：可依物品名稱關鍵字搜尋，或選擇小組直接列出該小組目前持有中（已領未還）的所有物品與數量。底部導覽列的「小組管理」分頁改名為「設定」；快捷選取清單管理的物品／來源單位／經辦人員三個分類改為可收合卡片，預設收合並顯示項目數量，點開才看到完整清單與新增/編輯/刪除/排序，避免清單越加越長讓頁面過度冗長。"
     },
@@ -659,7 +663,7 @@ function calculateAndRenderInventory() {
         const detailsA = itemSrcs.map(s => {
             const serial = formatSerial(s.serial);
             const sourceLabel = s.sourceType === 'own' ? '存放位置' : '來源';
-            return `<span class="block text-xs text-[var(--brown-400)]">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${sourceTypeIcon(s.sourceType)} ${sourceLabel}：${escapeHtml(s.source)} : <b>${s.qty}</b> (${escapeHtml(s.method)})</span>`;
+            return `<span class="block text-xs text-[var(--brown-400)]">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}<b class="text-[var(--brown-600)]">${escapeHtml(itemName)}</b> ${sourceTypeIcon(s.sourceType)} ${sourceLabel}：${escapeHtml(s.source)} : <b>${s.qty}</b> (${escapeHtml(s.method)})</span>`;
         }).join('');
 
         const itemAllocs = rawAllocations.filter(a => a.item === itemName);
