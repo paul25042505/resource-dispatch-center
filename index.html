@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ 全戰術活動物資與任務指揮中心</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .status-done-line { text-decoration: line-through; opacity: 0.5; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen">
+
+<div class="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
+    
+    <header class="bg-slate-900 text-white rounded-2xl p-6 shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+            <h1 class="text-2xl font-black tracking-wider flex items-center gap-2">
+                <span>⚡</span> 物資與任務行動指揮中心
+            </h1>
+            <p class="text-slate-400 text-xs mt-1">Multi-device Realtime Sync Dashboard</p>
+        </div>
+        <div class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-4 py-1.5 rounded-full text-xs font-bold tracking-wide flex items-center gap-2 animate-pulse">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 雲端資料庫已連線
+        </div>
+    </header>
+
+    <nav class="bg-slate-200/60 p-1.5 rounded-xl flex gap-2">
+        <button id="btn-tab-inventory" onclick="switchTab('inventory')" class="tab-btn flex-1 py-3 text-sm font-bold rounded-lg transition-all bg-white text-slate-900 shadow-sm">
+            📊 物資大盤總表
+        </button>
+        <button id="btn-tab-operations" onclick="switchTab('operations')" class="tab-btn flex-1 py-3 text-sm font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">
+            🔄 物資進出作業
+        </button>
+        <button id="btn-tab-tasks" onclick="switchTab('tasks')" class="tab-btn flex-1 py-3 text-sm font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">
+            📋 任務調度中心
+        </button>
+    </nav>
+
+    <main id="page-inventory" class="tab-page space-y-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+            <div class="px-6 py-4 border-bottom border-slate-100 bg-slate-50/50">
+                <h3 class="font-bold text-slate-900 flex items-center gap-2 text-base">
+                    <span class="w-1.5 h-4 bg-orange-500 rounded-full"></span> 全場物資流向動態精算
+                </h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table id="inventoryTable" class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                            <th class="p-4">物品名稱</th>
+                            <th class="p-4 text-slate-900">總借入 (A)</th>
+                            <th class="p-4 text-xs font-normal text-slate-500">來源明細</th>
+                            <th class="p-4 text-blue-600">組別已領 (B)</th>
+                            <th class="p-4 text-xs font-normal text-slate-500">分配明細</th>
+                            <th class="p-4 text-emerald-600">已還 (C)</th>
+                            <th class="p-4 text-rose-600">流浪中 (B-C)</th>
+                            <th class="p-4 bg-slate-900 text-white font-black text-center rounded-tl-md">庫房剩餘</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-slate-600">
+                        <tr><td colspan="8" class="p-8 text-center text-slate-400 font-medium">資料庫同步中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <main id="page-operations" class="tab-page hidden space-y-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 space-y-4">
+            <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                <span class="w-1.5 h-4 bg-orange-500 rounded-full"></span> 📥 1. 原始物資借入登錄 (入庫房)
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/50">
+                <input type="text" id="srcItem" placeholder="物品(如:無線電)" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-orange-500">
+                <input type="text" id="srcUnit" placeholder="來源單位(如:二連)" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-orange-500">
+                <input type="number" id="srcQty" placeholder="數量" min="1" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-orange-500">
+                <select id="srcMethod" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-orange-500">
+                    <option value="借據">📜 書面借據</option>
+                    <option value="刷臉">👤 口頭刷臉</option>
+                </select>
+                <input type="text" id="srcNote" placeholder="備註/單號" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-orange-500">
+                <button id="btnSrcSubmit" class="md:col-span-5 w-full md:w-auto bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-6 rounded-lg text-sm transition shadow-sm ml-auto block">登錄借入</button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 space-y-4">
+            <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                <span class="w-1.5 h-4 bg-blue-500 rounded-full"></span> 📤 2. 組別物資領用簽收 (分發出去)
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/50">
+                <input type="text" id="allocItem" placeholder="物品名稱" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-blue-500">
+                <select id="allocGroup" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-blue-500"></select>
+                <input type="number" id="allocQty" placeholder="數量" min="1" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-blue-500">
+                <input type="text" id="allocUser" placeholder="領用人簽名" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-blue-500">
+                <button id="btnAllocSubmit" class="md:col-span-4 w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg text-sm transition shadow-sm ml-auto block">確認發放</button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 space-y-4">
+            <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                <span class="w-1.5 h-4 bg-emerald-500 rounded-full"></span> ↩️ 3. 各組物資歸還登錄 (返回倉庫)
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/50">
+                <input type="text" id="retItem" placeholder="物品名稱" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-emerald-500">
+                <select id="retGroup" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-emerald-500"></select>
+                <input type="number" id="retQty" placeholder="數量" min="1" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-emerald-500">
+                <input type="text" id="retReceiver" placeholder="收回點收人" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-emerald-500">
+                <input type="text" id="retNote" placeholder="物品損壞狀況備註" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-emerald-500">
+                <button id="btnRetSubmit" class="md:col-span-5 w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-lg text-sm transition shadow-sm ml-auto block">確認歸還</button>
+            </div>
+        </div>
+    </main>
+
+    <main id="page-tasks" class="tab-page hidden space-y-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 space-y-4">
+            <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                <span class="w-1.5 h-4 bg-violet-500 rounded-full"></span> 📋 4. 建立與指派全新任務
+            </h3>
+            <div class="flex flex-col md:flex-row gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/50">
+                <input type="text" id="taskName" placeholder="輸入任務具體內容（如:大會司令台架設）" class="flex-1 p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-violet-500">
+                <select id="taskGroup" class="w-full md:w-64 p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-violet-500"></select>
+                <button id="btnTaskSubmit" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 px-6 rounded-lg text-sm transition shadow-sm whitespace-nowrap">➕ 新增專案任務</button>
+            </div>
+
+            <div class="overflow-x-auto mt-4">
+                <table id="taskTable" class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                            <th class="p-4">當前任務動態與狀態</th>
+                            <th class="p-4 w-40">主責負責單位</th>
+                            <th class="p-4 w-48 text-right">戰術操作面板</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { 
+        getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+   
+  // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBXq7TwBQB0kStv2RsqDl8bzTkrlly8ADg",
+  authDomain: "resource-dispatch-center-92600.firebaseapp.com",
+  projectId: "resource-dispatch-center-92600",
+  storageBucket: "resource-dispatch-center-92600.firebasestorage.app",
+  messagingSenderId: "918583881592",
+  appId: "1:918583881592:web:6561383b516bc8e11c228d"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // 內建組織分層對照表
+    const groups = [
+        { id: 1, name: "行政組" },
+        { id: 2, name: "教管組" },
+        { id: 3, name: "站上組" },
+        { id: 4, name: "教管一組 (子)" },
+        { id: 5, name: "教管二組 (子)" }
+    ];
+
+    let rawSources = [], rawAllocations = [], rawReturns = [];
+
+    window.addEventListener('DOMContentLoaded', () => {
+        renderGroupSelects();
+        setupRealtimeListeners();
+        bindFormEvents();
+    });
+
+    // 處理頁面 Tab 切換邏輯
+    window.switchTab = function(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+            btn.classList.add('text-slate-600');
+        });
+        document.querySelectorAll('.tab-page').forEach(page => page.classList.add('hidden'));
+
+        const activeBtn = document.getElementById(`btn-tab-${tabId}`);
+        activeBtn.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+        activeBtn.classList.remove('text-slate-600');
+        document.getElementById(`page-${tabId}`).classList.remove('hidden');
+    };
+
+    function renderGroupSelects() {
+        ['#allocGroup', '#retGroup', '#taskGroup'].forEach(selector => {
+            document.querySelector(selector).innerHTML = groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+        });
+    }
+
+    function bindFormEvents() {
+        document.getElementById('btnSrcSubmit').onclick = async () => {
+            const item = document.getElementById('srcItem').value.trim();
+            const source = document.getElementById('srcUnit').value.trim();
+            const qty = parseInt(document.getElementById('srcQty').value);
+            const method = document.getElementById('srcMethod').value;
+            const note = document.getElementById('srcNote').value.trim();
+            if(!item || !source || isNaN(qty)) return alert("請完整填寫項目、來源與數量");
+            
+            await addDoc(collection(db, "sources"), { item, source, qty, method, note, timestamp: new Date() });
+            document.getElementById('srcItem').value = ''; document.getElementById('srcQty').value = '';
+        };
+
+        document.getElementById('btnAllocSubmit').onclick = async () => {
+            const item = document.getElementById('allocItem').value.trim();
+            const groupId = parseInt(document.getElementById('allocGroup').value);
+            const qty = parseInt(document.getElementById('allocQty').value);
+            const user = document.getElementById('allocUser').value.trim();
+            if(!item || isNaN(qty) || !user) return alert("填寫不完整");
+
+            await addDoc(collection(db, "allocations"), { item, groupId, qty, user, timestamp: new Date() });
+            document.getElementById('allocItem').value = ''; document.getElementById('allocQty').value = '';
+        };
+
+        document.getElementById('btnRetSubmit').onclick = async () => {
+            const item = document.getElementById('retItem').value.trim();
+            const groupId = parseInt(document.getElementById('retGroup').value);
+            const qty = parseInt(document.getElementById('retQty').value);
+            const receiver = document.getElementById('retReceiver').value.trim();
+            const note = document.getElementById('retNote').value.trim();
+            if(!item || isNaN(qty) || !receiver) return alert("填寫不完整");
+
+            await addDoc(collection(db, "returns"), { item, groupId, qty, receiver, note, timestamp: new Date() });
+            document.getElementById('retItem').value = ''; document.getElementById('retQty').value = '';
+        };
+
+        document.getElementById('btnTaskSubmit').onclick = async () => {
+            const name = document.getElementById('taskName').value.trim();
+            const groupId = parseInt(document.getElementById('taskGroup').value);
+            if(!name) return alert("請輸入任務名稱");
+
+            await addDoc(collection(db, "tasks"), { name, groupId, status: "未開始", timestamp: new Date() });
+            document.getElementById('taskName').value = '';
+        };
+    }
+
+    function setupRealtimeListeners() {
+        onSnapshot(collection(db, "sources"), (snap) => {
+            rawSources = []; snap.forEach(d => rawSources.push(d.data()));
+            calculateAndRenderInventory();
+        });
+        onSnapshot(collection(db, "allocations"), (snap) => {
+            rawAllocations = []; snap.forEach(d => rawAllocations.push(d.data()));
+            calculateAndRenderInventory();
+        });
+        onSnapshot(collection(db, "returns"), (snap) => {
+            rawReturns = []; snap.forEach(d => rawReturns.push(d.data()));
+            calculateAndRenderInventory();
+        });
+        const qTasks = query(collection(db, "tasks"), orderBy("timestamp", "asc"));
+        onSnapshot(qTasks, (snap) => {
+            renderTasksElement(snap);
+        });
+    }
+
+    function calculateAndRenderInventory() {
+        const allItems = Array.from(new Set([...rawSources.map(s=>s.item), ...rawAllocations.map(a=>a.item), ...rawReturns.map(r=>r.item)]));
+        const tbody = document.querySelector("#inventoryTable tbody");
+        
+        if(allItems.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 font-medium">目前尚無庫存異動紀錄。請前往【進出作業】分頁登錄。</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = allItems.map(itemName => {
+            const itemSrcs = rawSources.filter(s => s.item === itemName);
+            const totalA = itemSrcs.reduce((sum, s) => sum + s.qty, 0);
+            const detailsA = itemSrcs.map(s => `<span class="block text-xs text-slate-500">${s.source} : <b>${s.qty}</b> (${s.method})</span>`).join('');
+
+            const itemAllocs = rawAllocations.filter(a => a.item === itemName);
+            const totalB = itemAllocs.reduce((sum, a) => sum + a.qty, 0);
+            const detailsB = itemAllocs.map(a => {
+                const g = groups.find(g => g.id === a.groupId);
+                return `<span class="block text-xs text-slate-500">${g?g.name:'未知'} : <b>${a.qty}</b> (${a.user})</span>`;
+            }).join('');
+
+            const totalC = rawReturns.filter(r => r.item === itemName).reduce((sum, r) => sum + r.qty, 0);
+            const 流浪中 = totalB - totalC;
+            const 庫房剩餘 = totalA - totalB + totalC;
+
+            return `
+                <tr class="hover:bg-slate-50/80 transition-colors">
+                    <td class="p-4 font-bold text-slate-900">${itemName}</td>
+                    <td class="p-4 font-bold text-slate-800">${totalA}</td>
+                    <td class="p-4">${detailsA || '-'}</td>
+                    <td class="p-4 font-bold text-blue-600">${totalB}</td>
+                    <td class="p-4">${detailsB || '-'}</td>
+                    <td class="p-4 font-bold text-emerald-600">${totalC}</td>
+                    <td class="p-4 font-bold ${流浪中 > 0 ? 'text-rose-600' : 'text-slate-400'}">${流浪中}</td>
+                    <td class="p-4 bg-slate-900 text-white font-black text-center text-base">${庫房剩餘}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderTasksElement(snapshot) {
+        const tbody = document.querySelector("#taskTable tbody");
+        if(snapshot.empty) {
+            tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-slate-400 font-medium">當前無指派任務</td></tr>`;
+            return;
+        }
+
+        let html = "";
+        snapshot.forEach(docSnap => {
+            const t = docSnap.data();
+            const id = docSnap.id;
+            const g = groups.find(g => g.id === t.groupId);
+            const isDone = t.status === "已完成";
+
+            html += `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-4 ${isDone ? 'status-done-line text-slate-400' : 'font-bold text-slate-800'}">
+                        ${isDone ? '🔹 ' : '🔸 '} ${t.name}
+                    </td>
+                    <td class="p-4">
+                        <span class="px-2.5 py-1 rounded-md text-xs font-bold ${isDone ? 'bg-slate-100 text-slate-400' : 'bg-orange-50 text-orange-600 border border-orange-100'}">
+                            ${g ? g.name : '通用'}
+                        </span>
+                    </td>
+                    <td class="p-4 text-right space-x-1 whitespace-nowrap">
+                        <button class="btn-complete-task bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold py-1 px-2.5 rounded text-xs transition" data-id="${id}" data-status="${t.status}">
+                            ${isDone ? '↩️ 重啟' : '✅ 完成'}
+                        </button>
+                        <button class="btn-edit-task bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold py-1 px-2.5 rounded text-xs transition" data-id="${id}" data-name="${t.name}">✏️ 改</button>
+                        <button class="btn-delete-task bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold py-1 px-2.5 rounded text-xs transition" data-id="${id}">❌ 刪</button>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+
+        document.querySelectorAll('.btn-complete-task').forEach(b => {
+            b.onclick = async () => {
+                const next = b.dataset.status === "已完成" ? "進行中" : "已完成";
+                await updateDoc(doc(db, "tasks", b.dataset.id), { status: next });
+            };
+        });
+        document.querySelectorAll('.btn-edit-task').forEach(b => {
+            b.onclick = async () => {
+                const newName = prompt("請修改任務名稱：", b.dataset.name);
+                if(newName) await updateDoc(doc(db, "tasks", b.dataset.id), { name: newName.trim() });
+            };
+        });
+        document.querySelectorAll('.btn-delete-task').forEach(b => {
+            b.onclick = async () => {
+                if(confirm("確定刪除此任務？")) await deleteDoc(doc(db, "tasks", b.dataset.id));
+            };
+        });
+    }
+</script>
+</body>
+</html>
