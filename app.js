@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.18",
+        notes: "借用報表的每個物品現在可以點開，展開後看到該小組實際的領用/歸還逐筆明細（含經手人與時間）。入庫登錄/領用簽收/歸還登記表單的「快速選取」改成點一下就帶入的膠囊按鈕（取代原本容易被忽略的下拉選單），品項按鈕會同時顯示目前庫房剩餘。歸還登記選好小組後，該小組尚未歸還的數量提示會立刻顯示在小組欄位下方，不用捲到表單最後才看到。"
+    },
+    {
         version: "v0.0.17",
         notes: "底部導覽列新增「🧾 借用報表」分頁：列出本專案每個小組累計借用過的物品與數量（不因歸還而減少），並顯示已歸還/尚未歸還的細項，可作為下次類似任務整備物資時的參考依據。"
     },
@@ -520,22 +524,25 @@ function quickpicksByCategory(category) {
 
 function renderAllChips() {
     QP_FIELD_BINDINGS.forEach(({ inputId, selectId, category, showStock }) => {
-        const select = document.getElementById(selectId);
-        if (!select) return;
+        const row = document.getElementById(selectId);
+        if (!row) return;
+        const block = document.getElementById(`qpBlock-${inputId}`);
         const resolvedCategory = typeof category === 'function' ? category() : category;
         const items = quickpicksByCategory(resolvedCategory);
-        const options = items.map(q => {
-            const label = showStock ? `${q.value}（庫房剩餘：${getItemRemaining(q.value)} 件）` : q.value;
-            return `<option value="${escapeHtml(q.value)}">${escapeHtml(label)}</option>`;
+        if (block) block.classList.toggle('hidden', items.length === 0);
+        const input = document.getElementById(inputId);
+        row.innerHTML = items.map(q => {
+            const stock = showStock ? getItemRemaining(q.value) : null;
+            const selected = input && input.value.trim() === q.value;
+            return `<button type="button" class="qp-chip shrink-0${selected ? ' is-selected' : ''}" data-value="${escapeHtml(q.value)}">${escapeHtml(q.value)}${stock !== null ? ` <span class="qp-chip-stock">${stock}</span>` : ''}</button>`;
         }).join('');
-        select.innerHTML = `<option value="">📋 或從清單快速選取...</option>${options}`;
-        select.onchange = () => {
-            if (!select.value) return;
-            const input = document.getElementById(inputId);
-            input.value = select.value;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            select.value = '';
-        };
+        row.querySelectorAll('.qp-chip').forEach(btn => {
+            btn.onclick = () => {
+                input.value = btn.dataset.value;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                row.querySelectorAll('.qp-chip').forEach(b => b.classList.toggle('is-selected', b === btn));
+            };
+        });
     });
 }
 
@@ -699,11 +706,11 @@ function updateRetOutstandingHint() {
     const outstanding = getGroupOutstanding(itemName, groupId);
     if (outstanding <= 0) {
         el.textContent = `⚠️ ${groupLabel} 目前沒有登記中的「${itemName}」可歸還`;
-        el.className = 'md:col-span-5 text-xs font-bold min-h-[1em] text-amber-600';
+        el.className = 'text-xs font-bold mt-1.5 min-h-[1em] text-amber-600';
         return;
     }
     el.textContent = `↩️ ${groupLabel} 目前領用中尚未歸還：${outstanding} 件`;
-    el.className = 'md:col-span-5 text-xs font-bold min-h-[1em] text-blue-700';
+    el.className = 'text-xs font-bold mt-1.5 min-h-[1em] text-blue-700';
 }
 
 // ============ 物資總表 ============
@@ -834,14 +841,35 @@ function renderGroupBorrowReport() {
         const summary = getGroupBorrowSummary(g.docId);
         const rows = summary.length === 0
             ? `<div class="px-4 py-3 text-xs text-[var(--brown-300)]">尚無借用紀錄</div>`
-            : summary.map(s => `
-                <div class="px-4 py-3 flex items-center justify-between gap-3">
-                    <span class="font-bold text-sm text-[var(--brown-900)] truncate">${escapeHtml(s.item)}</span>
-                    <span class="text-xs text-[var(--brown-500)] text-right shrink-0">
-                        累計 <b class="text-[var(--brown-800)]">${s.total}</b>・已還 ${s.returned}・${s.outstanding > 0 ? `<b class="text-rose-600">未還 ${s.outstanding}</b>` : '已全數歸還'}
-                    </span>
-                </div>
-            `).join('');
+            : summary.map(s => {
+                const allocs = rawAllocations.filter(a => a.item === s.item && String(a.groupId) === String(g.docId));
+                const rets = rawReturns.filter(r => r.item === s.item && String(r.groupId) === String(g.docId));
+                const allocLines = allocs.map(a => {
+                    const serial = formatSerial(a.serial);
+                    return `<div>${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}📤 領用 <b>${a.qty}</b>（${escapeHtml(a.user)}）・${formatTimestamp(a.timestamp)}</div>`;
+                }).join('') || `<div class="text-[var(--brown-300)]">尚無領用紀錄</div>`;
+                const retLines = rets.map(r => {
+                    const serial = formatSerial(r.serial);
+                    return `<div>${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}📋 歸還 <b>${r.qty}</b>（${escapeHtml(r.receiver)}）・${formatTimestamp(r.timestamp)}${r.note ? `・備註：${escapeHtml(r.note)}` : ''}</div>`;
+                }).join('') || `<div class="text-[var(--brown-300)]">尚無歸還紀錄</div>`;
+                return `
+                <details class="plain-details">
+                    <summary class="px-4 py-3 flex items-center justify-between gap-3">
+                        <span class="font-bold text-sm text-[var(--brown-900)] truncate">${escapeHtml(s.item)}</span>
+                        <span class="text-xs text-[var(--brown-500)] text-right shrink-0 flex items-center gap-1">
+                            <span>累計 <b class="text-[var(--brown-800)]">${s.total}</b>・已還 ${s.returned}・${s.outstanding > 0 ? `<b class="text-rose-600">未還 ${s.outstanding}</b>` : '已全數歸還'}</span>
+                            <span class="detail-caret text-[var(--brown-300)]">▾</span>
+                        </span>
+                    </summary>
+                    <div class="px-4 pb-3 pt-1 space-y-1 text-xs text-[var(--brown-500)] bg-[var(--tan-100)]/50 border-t border-dashed border-[var(--tan-300)]">
+                        <div class="font-bold text-[var(--brown-700)] pt-1.5">領用明細</div>
+                        ${allocLines}
+                        <div class="font-bold text-[var(--brown-700)] pt-1.5">歸還明細</div>
+                        ${retLines}
+                    </div>
+                </details>
+            `;
+            }).join('');
         return `
             <div class="card overflow-hidden">
                 <div class="card-header">

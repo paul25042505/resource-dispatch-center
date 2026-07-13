@@ -97,6 +97,44 @@ body {
 }
 .qp-icon-btn { min-width: 36px; min-height: 36px; }
 
+/* 快速選取膠囊按鈕（取代下拉選單） */
+.qp-chip {
+    min-height: 36px;
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    background: var(--tan-100);
+    border: 1px solid var(--tan-300);
+    color: var(--brown-700);
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: filter .1s ease, transform .05s ease;
+}
+.qp-chip:active { transform: translateY(1px); }
+.qp-chip.is-selected {
+    background: var(--clay);
+    border-color: var(--clay-dark);
+    color: var(--cream);
+}
+.qp-chip-stock {
+    background: var(--brown-900);
+    color: var(--cream);
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+}
+.qp-chip.is-selected .qp-chip-stock { background: rgba(0,0,0,0.25); }
+
+/* 借用報表明細展開列 */
+.plain-details > summary { list-style: none; cursor: pointer; }
+.plain-details > summary::-webkit-details-marker { display: none; }
+.plain-details[open] > summary .detail-caret { transform: rotate(180deg); }
+.detail-caret { transition: transform .15s ease; display: inline-block; }
+
 /* 專案卡片（Level 0 主控台） */
 .project-card {
     background: var(--paper);
