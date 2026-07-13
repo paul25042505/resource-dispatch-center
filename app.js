@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.17",
+        notes: "底部導覽列新增「🧾 借用報表」分頁：列出本專案每個小組累計借用過的物品與數量（不因歸還而減少），並顯示已歸還/尚未歸還的細項，可作為下次類似任務整備物資時的參考依據。"
+    },
+    {
         version: "v0.0.16",
         notes: "設定頁的「來源單位」快捷選取清單拆成「🌐 外部單位」與「🏠 存放位置」兩個獨立分類，入庫登錄表單的下拉選單也會依「來源類型」自動切換對應清單，不再混在一起顯示。既有的舊清單會依照每個項目過去實際登錄時的來源類型，自動歸類到正確的新分類，不需手動搬移。"
     },
@@ -716,6 +720,7 @@ function calculateAndRenderInventory() {
         updateRetOutstandingHint();
         renderAllChips();
         renderGroupHoldings();
+        renderGroupBorrowReport();
         return;
     }
 
@@ -729,6 +734,7 @@ function calculateAndRenderInventory() {
         updateRetOutstandingHint();
         renderAllChips();
         renderGroupHoldings();
+        renderGroupBorrowReport();
         return;
     }
 
@@ -802,6 +808,51 @@ function calculateAndRenderInventory() {
     updateRetOutstandingHint();
     renderAllChips();
     renderGroupHoldings();
+    renderGroupBorrowReport();
+}
+
+// 各小組累計借用總覽（不因歸還而減少，做為下次類似任務的整備參考）
+function getGroupBorrowSummary(groupId) {
+    const items = Array.from(new Set(rawAllocations.filter(a => String(a.groupId) === String(groupId)).map(a => a.item)));
+    return items.map(item => {
+        const total = rawAllocations.filter(a => a.item === item && String(a.groupId) === String(groupId)).reduce((sum, a) => sum + a.qty, 0);
+        const returned = rawReturns.filter(r => r.item === item && String(r.groupId) === String(groupId)).reduce((sum, r) => sum + r.qty, 0);
+        return { item, total, returned, outstanding: total - returned };
+    }).filter(x => x.total > 0);
+}
+
+function renderGroupBorrowReport() {
+    const el = document.getElementById('groupBorrowReport');
+    if (!el) return;
+
+    if (rawGroups.length === 0) {
+        el.innerHTML = `<div class="card p-8 text-center text-[var(--brown-300)] font-medium text-sm">尚無小組資料，請先於「設定」分頁新增小組。</div>`;
+        return;
+    }
+
+    el.innerHTML = rawGroups.map(g => {
+        const summary = getGroupBorrowSummary(g.docId);
+        const rows = summary.length === 0
+            ? `<div class="px-4 py-3 text-xs text-[var(--brown-300)]">尚無借用紀錄</div>`
+            : summary.map(s => `
+                <div class="px-4 py-3 flex items-center justify-between gap-3">
+                    <span class="font-bold text-sm text-[var(--brown-900)] truncate">${escapeHtml(s.item)}</span>
+                    <span class="text-xs text-[var(--brown-500)] text-right shrink-0">
+                        累計 <b class="text-[var(--brown-800)]">${s.total}</b>・已還 ${s.returned}・${s.outstanding > 0 ? `<b class="text-rose-600">未還 ${s.outstanding}</b>` : '已全數歸還'}
+                    </span>
+                </div>
+            `).join('');
+        return `
+            <div class="card overflow-hidden">
+                <div class="card-header">
+                    <h4 class="font-bold text-[var(--brown-900)] text-sm flex items-center gap-2 font-serif-tc">
+                        <span class="w-1.5 h-4 bg-violet-600 rounded-full"></span> 👥 ${escapeHtml(g.name)}
+                    </h4>
+                </div>
+                <div class="divide-y divide-[var(--tan-200)]">${rows}</div>
+            </div>
+        `;
+    }).join('');
 }
 
 // 全新的入庫來源交易紀錄：以個別入庫事件（而非依物品彙總）列出，預設只顯示物品名稱與
