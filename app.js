@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.16",
+        notes: "設定頁的「來源單位」快捷選取清單拆成「🌐 外部單位」與「🏠 存放位置」兩個獨立分類，入庫登錄表單的下拉選單也會依「來源類型」自動切換對應清單，不再混在一起顯示。既有的舊清單會依照每個項目過去實際登錄時的來源類型，自動歸類到正確的新分類，不需手動搬移。"
+    },
+    {
         version: "v0.0.15",
         notes: "物資總表新增「領用紀錄」與「歸還紀錄」兩份清單，跟入庫來源紀錄一樣逐筆列出、可點擊「⋮」編輯或刪除。三種紀錄的操作選單與底部彈出列已整合成共用機制，行為完全一致。"
     },
@@ -107,13 +111,16 @@ const DEFAULT_GROUPS = [
 
 const QP_CATEGORIES = {
     item: { listId: "qpList-item" },
-    source: { listId: "qpList-source" },
+    source_external: { listId: "qpList-source_external" },
+    source_own: { listId: "qpList-source_own" },
     person: { listId: "qpList-person" }
 };
-// 表單欄位對應的快捷選取分類與下拉選單；showStock 的欄位會在選項後附註目前庫房剩餘
+// 表單欄位對應的快捷選取分類與下拉選單；showStock 的欄位會在選項後附註目前庫房剩餘。
+// category 也可以是函式，用來依照當下其他欄位的值動態決定分類（例如來源單位依「來源
+// 類型」切換成外部單位或存放位置兩種不同的快捷清單）。
 const QP_FIELD_BINDINGS = [
     { inputId: "srcItem", selectId: "qpSelect-srcItem", category: "item", showStock: true },
-    { inputId: "srcUnit", selectId: "qpSelect-srcUnit", category: "source", showStock: false },
+    { inputId: "srcUnit", selectId: "qpSelect-srcUnit", category: () => document.getElementById('srcType').value === 'own' ? 'source_own' : 'source_external', showStock: false },
     { inputId: "allocItem", selectId: "qpSelect-allocItem", category: "item", showStock: true },
     { inputId: "allocUser", selectId: "qpSelect-allocUser", category: "person", showStock: false },
     { inputId: "retItem", selectId: "qpSelect-retItem", category: "item", showStock: true },
@@ -320,6 +327,8 @@ function enterProject(projectId, projectName) {
     window.switchTab('inventory');
     window.switchSubtab('in');
 
+    migrateSourceQuickpicksIfNeeded(projectId).catch(err => console.warn('快捷選項分類搬遷失敗', err));
+
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'sources'), (snap) => {
         rawSources = []; snap.forEach(d => rawSources.push({ docId: d.id, ...d.data() }));
         calculateAndRenderInventory();
@@ -466,6 +475,31 @@ async function addGroup() {
 }
 
 // ============ 快捷選取清單（逐專案獨立） ============
+// 一次性搬遷：v0.0.15 以前「來源單位」快捷選項不分外部/自有，共用同一個 category。
+// 依照該來源單位過去實際登錄時的 sourceType 統計，自動歸類到 source_external 或
+// source_own；搬遷後舊分類就不會再有任何文件，之後每次呼叫都會直接短路，不需要額外
+// 的旗標或 transaction 保護。
+async function migrateSourceQuickpicksIfNeeded(projectId) {
+    const qpSnap = await getDocs(collection(db, 'projects', projectId, 'quickpicks'));
+    const legacyDocs = qpSnap.docs.filter(d => d.data().category === 'source');
+    if (legacyDocs.length === 0) return;
+
+    const sourcesSnap = await getDocs(collection(db, 'projects', projectId, 'sources'));
+    const usageByValue = {};
+    sourcesSnap.forEach(d => {
+        const data = d.data();
+        if (!usageByValue[data.source]) usageByValue[data.source] = { external: 0, own: 0 };
+        usageByValue[data.source][data.sourceType === 'own' ? 'own' : 'external']++;
+    });
+
+    for (const docSnap of legacyDocs) {
+        const value = docSnap.data().value;
+        const usage = usageByValue[value];
+        const category = usage && usage.own > usage.external ? 'source_own' : 'source_external';
+        await updateDoc(doc(db, 'projects', projectId, 'quickpicks', docSnap.id), { category });
+    }
+}
+
 async function ensureQuickpick(category, value) {
     value = (value || '').trim();
     if (!value || !currentProjectId) return false;
@@ -484,7 +518,8 @@ function renderAllChips() {
     QP_FIELD_BINDINGS.forEach(({ inputId, selectId, category, showStock }) => {
         const select = document.getElementById(selectId);
         if (!select) return;
-        const items = quickpicksByCategory(category);
+        const resolvedCategory = typeof category === 'function' ? category() : category;
+        const items = quickpicksByCategory(resolvedCategory);
         const options = items.map(q => {
             const label = showStock ? `${q.value}（庫房剩餘：${getItemRemaining(q.value)} 件）` : q.value;
             return `<option value="${escapeHtml(q.value)}">${escapeHtml(label)}</option>`;
@@ -1179,6 +1214,7 @@ function bindGlobalEvents() {
         const input = document.getElementById('srcUnit');
         input.placeholder = e.target.value === 'own' ? '存放位置(如:衛生器材室、A棟2樓)' : '外部單位名稱(如:302旅)';
         updateMethodWrapVisibility('srcMethodWrap', e.target.value);
+        renderAllChips();
     });
 
     document.getElementById('allocItem').addEventListener('input', updateAllocStockHint);
@@ -1204,7 +1240,7 @@ function bindGlobalEvents() {
         const serial = await getNextSerialNumber();
         await addDoc(collection(db, 'projects', currentProjectId, 'sources'), { item, sourceType, source, qty, method, note, serial, timestamp: new Date() });
         await ensureQuickpick('item', item);
-        await ensureQuickpick('source', source);
+        await ensureQuickpick(sourceType === 'own' ? 'source_own' : 'source_external', source);
         document.getElementById('srcItem').value = ''; document.getElementById('srcQty').value = '';
         document.getElementById('srcMethodOther').value = ''; document.getElementById('srcMethodOther').classList.add('hidden');
         document.getElementById('srcMethod').value = '借據';
