@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
     getFirestore, enableIndexedDbPersistence, collection, doc, addDoc, setDoc,
-    updateDoc, deleteDoc, onSnapshot, query, orderBy, getDocs, getDocsFromServer,
+    updateDoc, deleteDoc, onSnapshot, query, orderBy, getDocs,
     runTransaction
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
@@ -34,6 +34,10 @@ try {
 
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
+    {
+        version: "v0.0.12",
+        notes: "手機下拉重新整理手勢改為直接重新載入整個網頁（window.location.reload），取代原本只在背景靜默同步 Firestore 資料的方式，行為更符合一般下拉刷新的預期。"
+    },
     {
         version: "v0.0.11",
         notes: "修正「⋮」選單在清單捲動範圍內被裁切、看不到編輯/刪除按鈕的問題：改為底部彈出的操作列（跟編輯/版本紀錄彈窗同一種呈現方式），不會再被清單的捲動容器裁掉。"
@@ -905,32 +909,11 @@ function initPullToRefresh() {
     });
 }
 
-async function triggerManualRefresh() {
+function triggerManualRefresh() {
     const indicator = document.getElementById('ptrIndicator');
     indicator.classList.add('ptr-spinning');
     indicator.style.opacity = '1';
-
-    try {
-        if (navigator.onLine) {
-            if (currentProjectId) {
-                await Promise.all([
-                    getDocsFromServer(collection(db, 'projects', currentProjectId, 'sources')),
-                    getDocsFromServer(collection(db, 'projects', currentProjectId, 'allocations')),
-                    getDocsFromServer(collection(db, 'projects', currentProjectId, 'returns')),
-                    getDocsFromServer(collection(db, 'projects', currentProjectId, 'groups')),
-                    getDocsFromServer(collection(db, 'projects', currentProjectId, 'quickpicks'))
-                ]);
-            } else {
-                await getDocsFromServer(collection(db, 'projects'));
-            }
-        }
-    } catch (err) {
-        console.warn('手動重新整理失敗（可能目前離線）', err);
-    }
-
-    await new Promise(r => setTimeout(r, 350));
-    indicator.classList.remove('ptr-spinning');
-    indicator.style.opacity = '0';
+    window.location.reload();
 }
 
 // ============ 表單事件綁定（僅需綁定一次，DOM 節點皆為靜態） ============
