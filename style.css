@@ -89,18 +89,6 @@ body {
     border: 1px solid var(--tan-300);
 }
 
-.qp-chip {
-    min-height: 40px;
-    padding: 0.4rem 0.85rem;
-    border-radius: 999px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    background: var(--paper);
-    border: 1px solid var(--tan-300);
-    color: var(--brown-700);
-    transition: filter .15s ease;
-}
-.qp-chip:active { filter: brightness(0.95); }
 .qp-row {
     min-height: 44px;
     background: var(--paper);

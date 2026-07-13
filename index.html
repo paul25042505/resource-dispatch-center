@@ -34,6 +34,11 @@ v0.0.6 - 入庫登錄的借入方式新增「其他」選項，選取後會多�
          歸還登記表單在輸入物品名稱與選擇小組後，會即時顯示該小組目前領用中尚未歸還
          的數量，填寫前就知道可以填多少。若送出的數量超過可用量，會先跳出確認視窗
          而不是直接擋下，避免因為系統資料誤差而卡住現場作業。
+v0.0.7 - 物品／來源單位／經辦人員的快捷選取，由按鈕列改為下拉選單，物品類的選單會在
+         每個選項後面附註「（庫房剩餘：X 件）」，選取前就能比較各物品的庫存量。入庫
+         登錄的來源欄位改為依「來源類型」動態顯示：外部借入顯示「外部單位名稱」，
+         自有物資則顯示「存放位置」，物資總表的來源明細也會標示對應的存放位置／來源
+         文字，方便日後尋找自有物資的實際擺放處。
 -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -58,11 +63,27 @@ v0.0.6 - 入庫登錄的借入方式新增「其他」選項，選取後會多�
             </h1>
             <p class="text-[var(--tan-300)] text-[11px] mt-1 tracking-[0.2em]">RESOURCE DISPATCH STATION</p>
         </div>
-        <div id="connStatus" class="conn-pill is-online border px-4 py-1.5 rounded-full text-xs font-bold tracking-wide flex items-center gap-2">
-            <span id="connDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span id="connText">雲端資料庫已連線</span>
+        <div class="flex flex-col items-center md:items-end gap-1.5">
+            <div id="connStatus" class="conn-pill is-online border px-4 py-1.5 rounded-full text-xs font-bold tracking-wide flex items-center gap-2">
+                <span id="connDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="connText">雲端資料庫已連線</span>
+            </div>
+            <button id="btnShowChangelog" class="version-badge px-2 py-1 rounded-md hover:brightness-95">v0.0.7</button>
         </div>
     </header>
+
+    <!-- 版本紀錄彈窗：點擊版本號徽章開啟 -->
+    <div id="changelogModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-3">
+        <div class="card w-full max-w-lg max-h-[80vh] overflow-y-auto p-4 md:p-6 space-y-3">
+            <div class="flex items-center justify-between">
+                <h3 class="font-bold text-[var(--brown-900)] text-base flex items-center gap-2 font-serif-tc">
+                    <span class="w-1.5 h-4 bg-[var(--brown-700)] rounded-full"></span> 🗒️ 版本紀錄
+                </h3>
+                <button id="btnCloseChangelog" class="qp-icon-btn text-[var(--brown-500)]">✖️</button>
+            </div>
+            <div id="changeLogList" class="space-y-2"></div>
+        </div>
+    </div>
 
     <!-- ============ Level 0：專案主控台 ============ -->
     <section id="screen-dashboard" class="space-y-4">
@@ -77,13 +98,6 @@ v0.0.6 - 入庫登錄的借入方式新增「其他」選項，選取後會多�
             <div id="projectList" class="space-y-2.5">
                 <div class="p-6 text-center text-[var(--brown-300)] font-medium text-sm">資料庫同步中...</div>
             </div>
-        </div>
-
-        <div class="card p-4 md:p-6 space-y-3">
-            <h3 class="font-bold text-[var(--brown-900)] text-base flex items-center gap-2 font-serif-tc">
-                <span class="w-1.5 h-4 bg-[var(--brown-700)] rounded-full"></span> 🗒️ 版本紀錄
-            </h3>
-            <div id="changeLogList" class="space-y-2"></div>
         </div>
     </section>
 
@@ -139,6 +153,17 @@ v0.0.6 - 入庫登錄的借入方式新增「其他」選項，選取後會多�
                     <div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">資料庫同步中...</div>
                 </div>
             </div>
+
+            <div class="card overflow-hidden">
+                <div class="card-header">
+                    <h3 class="font-bold text-[var(--brown-900)] flex items-center gap-2 text-base font-serif-tc">
+                        <span class="w-1.5 h-4 bg-[var(--clay)] rounded-full"></span> 📋 入庫來源紀錄
+                    </h3>
+                </div>
+                <div id="sourceLog" class="divide-y divide-[var(--tan-200)] max-h-96 overflow-y-auto">
+                    <div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">資料庫同步中...</div>
+                </div>
+            </div>
         </main>
 
         <main id="page-operations" class="tab-page hidden space-y-4">
@@ -149,15 +174,15 @@ v0.0.6 - 入庫登錄的借入方式新增「其他」選項，選取後會多�
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
                     <div>
                         <input type="text" id="srcItem" placeholder="物品(如:無線電)" class="field">
-                        <div id="qpChips-srcItem" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                        <select id="qpSelect-srcItem" class="field mt-1.5"></select>
                     </div>
                     <select id="srcType" class="field">
                         <option value="external">🌐 外部借入（跟外單位借）</option>
                         <option value="own">🏠 自有物資（本單位既有）</option>
                     </select>
                     <div>
-                        <input type="text" id="srcUnit" placeholder="來源單位/地點(如:302旅 或 衛生一連庫房)" class="field">
-                        <div id="qpChips-srcUnit" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                        <input type="text" id="srcUnit" placeholder="外部單位名稱(如:302旅)" class="field">
+                        <select id="qpSelect-srcUnit" class="field mt-1.5"></select>
                     </div>
                     <input type="number" id="srcQty" placeholder="數量" min="1" class="field">
                     <div>
@@ -180,14 +205,14 @@ v0.0.6 - 入庫登錄的借入方式新增「其他」選項，選取後會多�
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
                     <div>
                         <input type="text" id="allocItem" placeholder="物品名稱" class="field">
-                        <div id="qpChips-allocItem" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                        <select id="qpSelect-allocItem" class="field mt-1.5"></select>
                         <p id="allocItemStock" class="text-xs font-bold mt-1.5 min-h-[1em]"></p>
                     </div>
                     <select id="allocGroup" class="field"></select>
                     <input type="number" id="allocQty" placeholder="數量" min="1" class="field">
                     <div>
                         <input type="text" id="allocUser" placeholder="領用人簽名" class="field">
-                        <div id="qpChips-allocUser" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                        <select id="qpSelect-allocUser" class="field mt-1.5"></select>
                     </div>
                     <button id="btnAllocSubmit" class="btn md:col-span-4 w-full md:w-auto ml-auto block" style="background:#2563eb;color:var(--cream);">確認發放</button>
                 </div>
@@ -200,13 +225,13 @@ v0.0.6 - 入庫登錄的借入方式新增「其他」選項，選取後會多�
                 <div class="grid grid-cols-1 md:grid-cols-5 gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
                     <div>
                         <input type="text" id="retItem" placeholder="物品名稱" class="field">
-                        <div id="qpChips-retItem" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                        <select id="qpSelect-retItem" class="field mt-1.5"></select>
                     </div>
                     <select id="retGroup" class="field"></select>
                     <input type="number" id="retQty" placeholder="數量" min="1" class="field">
                     <div>
                         <input type="text" id="retReceiver" placeholder="收回點收人" class="field">
-                        <div id="qpChips-retReceiver" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                        <select id="qpSelect-retReceiver" class="field mt-1.5"></select>
                     </div>
                     <input type="text" id="retNote" placeholder="物品損壞狀況備註" class="field">
                     <p id="retOutstandingHint" class="md:col-span-5 text-xs font-bold min-h-[1em]"></p>
@@ -267,10 +292,6 @@ v0.0.6 - 入庫登錄的借入方式新增「其他」選項，選取後會多�
             </div>
         </main>
     </section>
-
-    <p class="hidden md:flex justify-end pr-1">
-        <span class="version-badge px-2 py-1 rounded-md">v0.0.6</span>
-    </p>
 </div>
 
 <!-- 底部導覽列：僅於進入專案（Level 1）後顯示 -->
@@ -291,9 +312,6 @@ v0.0.6 - 入庫登錄的借入方式新增「其他」選項，選取後會多�
             <span class="tab-icon">👥</span>
             <span class="tab-label">小組管理</span>
         </button>
-        <div class="md:hidden flex items-center pr-2">
-            <span class="version-badge px-1.5 py-0.5 rounded whitespace-nowrap">v0.0.6</span>
-        </div>
     </div>
 </nav>
 
