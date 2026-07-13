@@ -1,168 +1,285 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+<!-- Change Log
+v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度所」；改為手機優先版面，
+         新增底部導覽列與上方子選單列；按鈕與輸入框觸控面積調整至 44x44px 以上；
+         物資總表在手機版改為卡片式檢視以提升可讀性；任務列表新增手機卡片版；
+         修正 Firebase 重複初始化與無效 bare-specifier import 導致頁面無法執行的錯誤。
+-->
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚡ 全戰術活動物資與任務指揮中心</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>資源調度所</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
-        .status-done-line { text-decoration: line-through; opacity: 0.5; }
+        :root {
+            --cream: #FBF3E4;
+            --paper: #FFFCF5;
+            --tan-100: #F3E4C6;
+            --tan-200: #E8D3A6;
+            --tan-300: #D8BC85;
+            --brown-300: #A98B62;
+            --brown-400: #8A6E4D;
+            --brown-600: #7A5230;
+            --brown-700: #6B4226;
+            --brown-800: #543319;
+            --brown-900: #3E2713;
+            --clay: #B5651D;
+            --clay-dark: #954E13;
+            --olive: #6B7A3D;
+            --olive-dark: #566432;
+        }
+        * { font-family: 'Noto Sans TC', sans-serif; }
+        .font-serif-tc { font-family: 'Noto Serif TC', serif; }
+        body {
+            background-color: var(--cream);
+            background-image: radial-gradient(circle, rgba(107,66,38,0.08) 1px, transparent 1px);
+            background-size: 18px 18px;
+        }
+        .status-done-line { text-decoration: line-through; opacity: 0.55; }
+        .card {
+            background: var(--paper);
+            border: 1px solid var(--tan-300);
+            border-radius: 1rem;
+            box-shadow: 0 2px 10px rgba(84,51,25,0.08);
+        }
+        .card-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px dashed var(--tan-300);
+            background: var(--tan-100);
+            border-radius: 1rem 1rem 0 0;
+        }
+        .field {
+            min-height: 44px;
+            width: 100%;
+            padding: 0.6rem 0.9rem;
+            border-radius: 0.65rem;
+            border: 1px solid var(--tan-300);
+            background: var(--paper);
+            font-size: 0.875rem;
+            color: var(--brown-900);
+        }
+        .field:focus { outline: none; border-color: var(--clay); box-shadow: 0 0 0 3px rgba(181,101,29,0.15); }
+        .field::placeholder { color: var(--brown-300); }
+        .btn {
+            min-height: 44px;
+            border-radius: 0.65rem;
+            font-weight: 700;
+            font-size: 0.875rem;
+            padding: 0.6rem 1.25rem;
+            transition: transform .05s ease, filter .15s ease;
+            box-shadow: 0 2px 0 rgba(0,0,0,0.15);
+        }
+        .btn:active { transform: translateY(1px); }
+        .btn-clay { background: var(--clay); color: var(--cream); }
+        .btn-clay:hover { filter: brightness(1.08); }
+        .btn-olive { background: var(--olive); color: var(--cream); }
+        .btn-olive:hover { filter: brightness(1.08); }
+        .btn-brown { background: var(--brown-700); color: var(--cream); }
+        .btn-brown:hover { filter: brightness(1.1); }
+
+        .subtab-btn { min-height: 44px; }
+        .subtab-btn.is-active { background: var(--clay); color: var(--cream); box-shadow: 0 2px 6px rgba(181,101,29,0.35); }
+        .subtab-btn:not(.is-active) { color: var(--brown-700); }
+
+        .tab-btn { min-height: 56px; }
+        .tab-btn .tab-icon { font-size: 1.35rem; line-height: 1; }
+        .tab-btn .tab-label { font-size: 0.68rem; font-weight: 700; }
+        .tab-btn.is-active { color: var(--clay-dark); }
+        .tab-btn.is-active .tab-indicator { opacity: 1; }
+        .tab-btn:not(.is-active) { color: var(--brown-300); }
+        .tab-indicator { opacity: 0; transition: opacity .15s ease; }
+
+        #bottomNav {
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        .version-badge {
+            font-size: 10px;
+            color: var(--brown-400);
+            background: var(--tan-100);
+            border: 1px solid var(--tan-300);
+        }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen">
+<body class="text-[var(--brown-900)] antialiased min-h-screen">
 
-<div class="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
-    
-    <header class="bg-slate-900 text-white rounded-2xl p-6 shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
-        <div>
-            <h1 class="text-2xl font-black tracking-wider flex items-center gap-2">
-                <span>⚡</span> 物資與任務行動指揮中心
+<div class="max-w-6xl mx-auto p-3 md:p-6 space-y-4 md:space-y-6 pb-28 md:pb-10">
+
+    <header class="relative overflow-hidden bg-gradient-to-br from-[var(--brown-900)] via-[var(--brown-800)] to-[var(--brown-700)] text-[var(--cream)] rounded-2xl px-5 py-6 shadow-lg flex flex-col md:flex-row justify-between items-center gap-3 border border-[var(--brown-900)]">
+        <div class="text-center md:text-left">
+            <h1 class="font-serif-tc text-2xl md:text-3xl font-black tracking-wide flex items-center justify-center md:justify-start gap-2">
+                <span>🏮</span> 資源調度所
             </h1>
-            <p class="text-slate-400 text-xs mt-1">Multi-device Realtime Sync Dashboard</p>
+            <p class="text-[var(--tan-300)] text-[11px] mt-1 tracking-[0.2em]">RESOURCE DISPATCH STATION</p>
         </div>
-        <div class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-4 py-1.5 rounded-full text-xs font-bold tracking-wide flex items-center gap-2 animate-pulse">
-            <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 雲端資料庫已連線
+        <div class="bg-black/20 text-emerald-300 border border-emerald-400/30 px-4 py-1.5 rounded-full text-xs font-bold tracking-wide flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 雲端資料庫已連線
         </div>
     </header>
 
-    <nav class="bg-slate-200/60 p-1.5 rounded-xl flex gap-2">
-        <button id="btn-tab-inventory" onclick="switchTab('inventory')" class="tab-btn flex-1 py-3 text-sm font-bold rounded-lg transition-all bg-white text-slate-900 shadow-sm">
-            📊 物資大盤總表
-        </button>
-        <button id="btn-tab-operations" onclick="switchTab('operations')" class="tab-btn flex-1 py-3 text-sm font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">
-            🔄 物資進出作業
-        </button>
-        <button id="btn-tab-tasks" onclick="switchTab('tasks')" class="tab-btn flex-1 py-3 text-sm font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">
-            📋 任務調度中心
-        </button>
+    <!-- 上方子選單列：僅於物資進出作業頁顯示，切換三種登錄表單 -->
+    <nav id="opsSubnav" class="hidden card p-1.5 flex gap-1.5 sticky top-2 z-20">
+        <button id="btn-subtab-in" onclick="switchSubtab('in')" class="subtab-btn is-active flex-1 rounded-lg text-xs md:text-sm font-bold transition-all">📥 入庫登錄</button>
+        <button id="btn-subtab-alloc" onclick="switchSubtab('alloc')" class="subtab-btn flex-1 rounded-lg text-xs md:text-sm font-bold transition-all">📤 領用簽收</button>
+        <button id="btn-subtab-return" onclick="switchSubtab('return')" class="subtab-btn flex-1 rounded-lg text-xs md:text-sm font-bold transition-all">↩️ 歸還登記</button>
     </nav>
 
-    <main id="page-inventory" class="tab-page space-y-6">
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
-            <div class="px-6 py-4 border-bottom border-slate-100 bg-slate-50/50">
-                <h3 class="font-bold text-slate-900 flex items-center gap-2 text-base">
-                    <span class="w-1.5 h-4 bg-orange-500 rounded-full"></span> 全場物資流向動態精算
+    <main id="page-inventory" class="tab-page space-y-4">
+        <div class="card overflow-hidden">
+            <div class="card-header">
+                <h3 class="font-bold text-[var(--brown-900)] flex items-center gap-2 text-base font-serif-tc">
+                    <span class="w-1.5 h-4 bg-[var(--clay)] rounded-full"></span> 全場物資流向動態精算
                 </h3>
             </div>
-            <div class="overflow-x-auto">
+
+            <!-- 桌面版：完整表格 -->
+            <div class="hidden md:block overflow-x-auto">
                 <table id="inventoryTable" class="w-full text-left border-collapse text-sm">
                     <thead>
-                        <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <tr class="bg-[var(--tan-100)] text-[var(--brown-800)] font-bold border-b border-[var(--tan-300)]">
                             <th class="p-4">物品名稱</th>
-                            <th class="p-4 text-slate-900">總借入 (A)</th>
-                            <th class="p-4 text-xs font-normal text-slate-500">來源明細</th>
-                            <th class="p-4 text-blue-600">組別已領 (B)</th>
-                            <th class="p-4 text-xs font-normal text-slate-500">分配明細</th>
-                            <th class="p-4 text-emerald-600">已還 (C)</th>
-                            <th class="p-4 text-rose-600">流浪中 (B-C)</th>
-                            <th class="p-4 bg-slate-900 text-white font-black text-center rounded-tl-md">庫房剩餘</th>
+                            <th class="p-4 text-[var(--brown-900)]">總借入 (A)</th>
+                            <th class="p-4 text-xs font-normal text-[var(--brown-400)]">來源明細</th>
+                            <th class="p-4 text-blue-700">組別已領 (B)</th>
+                            <th class="p-4 text-xs font-normal text-[var(--brown-400)]">分配明細</th>
+                            <th class="p-4 text-emerald-700">已還 (C)</th>
+                            <th class="p-4 text-rose-700">流浪中 (B-C)</th>
+                            <th class="p-4 bg-[var(--brown-900)] text-[var(--cream)] font-black text-center rounded-tl-md">庫房剩餘</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100 text-slate-600">
-                        <tr><td colspan="8" class="p-8 text-center text-slate-400 font-medium">資料庫同步中...</td></tr>
+                    <tbody class="divide-y divide-[var(--tan-200)] text-[var(--brown-700)]">
+                        <tr><td colspan="8" class="p-8 text-center text-[var(--brown-300)] font-medium">資料庫同步中...</td></tr>
                     </tbody>
                 </table>
             </div>
+
+            <!-- 手機版：卡片式檢視，縮減欄位提升可讀性 -->
+            <div id="inventoryCards" class="md:hidden divide-y divide-[var(--tan-200)]">
+                <div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">資料庫同步中...</div>
+            </div>
         </div>
     </main>
 
-    <main id="page-operations" class="tab-page hidden space-y-6">
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 space-y-4">
-            <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                <span class="w-1.5 h-4 bg-orange-500 rounded-full"></span> 📥 1. 原始物資借入登錄 (入庫房)
+    <main id="page-operations" class="tab-page hidden space-y-4">
+        <div id="subtab-in" class="subtab-page card p-4 md:p-6 space-y-4">
+            <h3 class="font-bold text-[var(--brown-900)] text-base flex items-center gap-2 font-serif-tc">
+                <span class="w-1.5 h-4 bg-[var(--clay)] rounded-full"></span> 📥 原始物資借入登錄 (入庫房)
             </h3>
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/50">
-                <input type="text" id="srcItem" placeholder="物品(如:無線電)" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-orange-500">
-                <input type="text" id="srcUnit" placeholder="來源單位(如:二連)" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-orange-500">
-                <input type="number" id="srcQty" placeholder="數量" min="1" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-orange-500">
-                <select id="srcMethod" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-orange-500">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
+                <input type="text" id="srcItem" placeholder="物品(如:無線電)" class="field">
+                <input type="text" id="srcUnit" placeholder="來源單位(如:二連)" class="field">
+                <input type="number" id="srcQty" placeholder="數量" min="1" class="field">
+                <select id="srcMethod" class="field">
                     <option value="借據">📜 書面借據</option>
                     <option value="刷臉">👤 口頭刷臉</option>
                 </select>
-                <input type="text" id="srcNote" placeholder="備註/單號" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-orange-500">
-                <button id="btnSrcSubmit" class="md:col-span-5 w-full md:w-auto bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-6 rounded-lg text-sm transition shadow-sm ml-auto block">登錄借入</button>
+                <input type="text" id="srcNote" placeholder="備註/單號" class="field">
+                <button id="btnSrcSubmit" class="btn btn-clay md:col-span-5 w-full md:w-auto ml-auto block">登錄借入</button>
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 space-y-4">
-            <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                <span class="w-1.5 h-4 bg-blue-500 rounded-full"></span> 📤 2. 組別物資領用簽收 (分發出去)
+        <div id="subtab-alloc" class="subtab-page hidden card p-4 md:p-6 space-y-4">
+            <h3 class="font-bold text-[var(--brown-900)] text-base flex items-center gap-2 font-serif-tc">
+                <span class="w-1.5 h-4 bg-blue-600 rounded-full"></span> 📤 組別物資領用簽收 (分發出去)
             </h3>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/50">
-                <input type="text" id="allocItem" placeholder="物品名稱" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-blue-500">
-                <select id="allocGroup" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-blue-500"></select>
-                <input type="number" id="allocQty" placeholder="數量" min="1" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-blue-500">
-                <input type="text" id="allocUser" placeholder="領用人簽名" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-blue-500">
-                <button id="btnAllocSubmit" class="md:col-span-4 w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg text-sm transition shadow-sm ml-auto block">確認發放</button>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
+                <input type="text" id="allocItem" placeholder="物品名稱" class="field">
+                <select id="allocGroup" class="field"></select>
+                <input type="number" id="allocQty" placeholder="數量" min="1" class="field">
+                <input type="text" id="allocUser" placeholder="領用人簽名" class="field">
+                <button id="btnAllocSubmit" class="btn md:col-span-4 w-full md:w-auto ml-auto block" style="background:#2563eb;color:var(--cream);">確認發放</button>
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 space-y-4">
-            <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                <span class="w-1.5 h-4 bg-emerald-500 rounded-full"></span> ↩️ 3. 各組物資歸還登錄 (返回倉庫)
+        <div id="subtab-return" class="subtab-page hidden card p-4 md:p-6 space-y-4">
+            <h3 class="font-bold text-[var(--brown-900)] text-base flex items-center gap-2 font-serif-tc">
+                <span class="w-1.5 h-4 bg-[var(--olive)] rounded-full"></span> ↩️ 各組物資歸還登錄 (返回倉庫)
             </h3>
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/50">
-                <input type="text" id="retItem" placeholder="物品名稱" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-emerald-500">
-                <select id="retGroup" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-emerald-500"></select>
-                <input type="number" id="retQty" placeholder="數量" min="1" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-emerald-500">
-                <input type="text" id="retReceiver" placeholder="收回點收人" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-emerald-500">
-                <input type="text" id="retNote" placeholder="物品損壞狀況備註" class="p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-emerald-500">
-                <button id="btnRetSubmit" class="md:col-span-5 w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-lg text-sm transition shadow-sm ml-auto block">確認歸還</button>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
+                <input type="text" id="retItem" placeholder="物品名稱" class="field">
+                <select id="retGroup" class="field"></select>
+                <input type="number" id="retQty" placeholder="數量" min="1" class="field">
+                <input type="text" id="retReceiver" placeholder="收回點收人" class="field">
+                <input type="text" id="retNote" placeholder="物品損壞狀況備註" class="field">
+                <button id="btnRetSubmit" class="btn btn-olive md:col-span-5 w-full md:w-auto ml-auto block">確認歸還</button>
             </div>
         </div>
     </main>
 
-    <main id="page-tasks" class="tab-page hidden space-y-6">
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 space-y-4">
-            <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                <span class="w-1.5 h-4 bg-violet-500 rounded-full"></span> 📋 4. 建立與指派全新任務
+    <main id="page-tasks" class="tab-page hidden space-y-4">
+        <div class="card p-4 md:p-6 space-y-4">
+            <h3 class="font-bold text-[var(--brown-900)] text-base flex items-center gap-2 font-serif-tc">
+                <span class="w-1.5 h-4 bg-violet-600 rounded-full"></span> 📋 建立與指派全新任務
             </h3>
-            <div class="flex flex-col md:flex-row gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/50">
-                <input type="text" id="taskName" placeholder="輸入任務具體內容（如:大會司令台架設）" class="flex-1 p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-violet-500">
-                <select id="taskGroup" class="w-full md:w-64 p-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-violet-500"></select>
-                <button id="btnTaskSubmit" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 px-6 rounded-lg text-sm transition shadow-sm whitespace-nowrap">➕ 新增專案任務</button>
+            <div class="flex flex-col md:flex-row gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
+                <input type="text" id="taskName" placeholder="輸入任務具體內容（如:大會司令台架設）" class="field flex-1">
+                <select id="taskGroup" class="field md:w-64"></select>
+                <button id="btnTaskSubmit" class="btn w-full md:w-auto whitespace-nowrap" style="background:#7c3aed;color:var(--cream);">➕ 新增專案任務</button>
             </div>
 
-            <div class="overflow-x-auto mt-4">
+            <!-- 桌面版：任務表格 -->
+            <div class="hidden md:block overflow-x-auto mt-4">
                 <table id="taskTable" class="w-full text-left border-collapse text-sm">
                     <thead>
-                        <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <tr class="bg-[var(--tan-100)] text-[var(--brown-800)] font-bold border-b border-[var(--tan-300)]">
                             <th class="p-4">當前任務動態與狀態</th>
                             <th class="p-4 w-40">主責負責單位</th>
                             <th class="p-4 w-48 text-right">戰術操作面板</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        </tbody>
+                    <tbody class="divide-y divide-[var(--tan-200)]"></tbody>
                 </table>
             </div>
+
+            <!-- 手機版：任務卡片 -->
+            <div id="taskCards" class="md:hidden divide-y divide-[var(--tan-200)] -mx-4 md:mx-0"></div>
         </div>
     </main>
+
+    <p class="hidden md:flex justify-end pr-1">
+        <span class="version-badge px-2 py-1 rounded-md">v0.0.1</span>
+    </p>
 </div>
+
+<!-- 底部導覽列：手機優先，固定於畫面底部方便單手操作 -->
+<nav id="bottomNav" class="fixed bottom-0 left-0 right-0 z-30 bg-[var(--paper)] border-t border-[var(--tan-300)] shadow-[0_-2px_10px_rgba(84,51,25,0.12)] flex">
+    <button id="btn-tab-inventory" onclick="switchTab('inventory')" class="tab-btn is-active flex-1 flex flex-col items-center justify-center gap-0.5 relative">
+        <span class="tab-indicator absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-[var(--clay)]"></span>
+        <span class="tab-icon">📊</span>
+        <span class="tab-label">物資總表</span>
+    </button>
+    <button id="btn-tab-operations" onclick="switchTab('operations')" class="tab-btn flex-1 flex flex-col items-center justify-center gap-0.5 relative">
+        <span class="tab-indicator absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-[var(--clay)]"></span>
+        <span class="tab-icon">🔄</span>
+        <span class="tab-label">進出作業</span>
+    </button>
+    <button id="btn-tab-tasks" onclick="switchTab('tasks')" class="tab-btn flex-1 flex flex-col items-center justify-center gap-0.5 relative">
+        <span class="tab-indicator absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-[var(--clay)]"></span>
+        <span class="tab-icon">📋</span>
+        <span class="tab-label">任務調度</span>
+    </button>
+    <div class="md:hidden flex items-center pr-2">
+        <span class="version-badge px-1.5 py-0.5 rounded whitespace-nowrap">v0.0.1</span>
+    </div>
+</nav>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { 
-        getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy 
+    import {
+        getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-   
-  // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyBXq7TwBQB0kStv2RsqDl8bzTkrlly8ADg",
-  authDomain: "resource-dispatch-center-92600.firebaseapp.com",
-  projectId: "resource-dispatch-center-92600",
-  storageBucket: "resource-dispatch-center-92600.firebasestorage.app",
-  messagingSenderId: "918583881592",
-  appId: "1:918583881592:web:6561383b516bc8e11c228d"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+    const firebaseConfig = {
+        apiKey: "AIzaSyBXq7TwBQB0kStv2RsqDl8bzTkrlly8ADg",
+        authDomain: "resource-dispatch-center-92600.firebaseapp.com",
+        projectId: "resource-dispatch-center-92600",
+        storageBucket: "resource-dispatch-center-92600.firebasestorage.app",
+        messagingSenderId: "918583881592",
+        appId: "1:918583881592:web:6561383b516bc8e11c228d"
+    };
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
@@ -184,18 +301,25 @@ const app = initializeApp(firebaseConfig);
         bindFormEvents();
     });
 
-    // 處理頁面 Tab 切換邏輯
+    // 處理頁面 Tab 切換邏輯（底部導覽列）
     window.switchTab = function(tabId) {
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
-            btn.classList.add('text-slate-600');
-        });
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('is-active'));
         document.querySelectorAll('.tab-page').forEach(page => page.classList.add('hidden'));
 
-        const activeBtn = document.getElementById(`btn-tab-${tabId}`);
-        activeBtn.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
-        activeBtn.classList.remove('text-slate-600');
+        document.getElementById(`btn-tab-${tabId}`).classList.add('is-active');
         document.getElementById(`page-${tabId}`).classList.remove('hidden');
+
+        // 上方子選單列僅於「物資進出作業」頁顯示
+        document.getElementById('opsSubnav').classList.toggle('hidden', tabId !== 'operations');
+    };
+
+    // 處理上方子選單列切換邏輯（物資進出作業頁的三種登錄表單）
+    window.switchSubtab = function(subtabId) {
+        document.querySelectorAll('.subtab-btn').forEach(btn => btn.classList.remove('is-active'));
+        document.querySelectorAll('.subtab-page').forEach(page => page.classList.add('hidden'));
+
+        document.getElementById(`btn-subtab-${subtabId}`).classList.add('is-active');
+        document.getElementById(`subtab-${subtabId}`).classList.remove('hidden');
     };
 
     function renderGroupSelects() {
@@ -212,7 +336,7 @@ const app = initializeApp(firebaseConfig);
             const method = document.getElementById('srcMethod').value;
             const note = document.getElementById('srcNote').value.trim();
             if(!item || !source || isNaN(qty)) return alert("請完整填寫項目、來源與數量");
-            
+
             await addDoc(collection(db, "sources"), { item, source, qty, method, note, timestamp: new Date() });
             document.getElementById('srcItem').value = ''; document.getElementById('srcQty').value = '';
         };
@@ -269,81 +393,147 @@ const app = initializeApp(firebaseConfig);
         });
     }
 
+    function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
     function calculateAndRenderInventory() {
         const allItems = Array.from(new Set([...rawSources.map(s=>s.item), ...rawAllocations.map(a=>a.item), ...rawReturns.map(r=>r.item)]));
         const tbody = document.querySelector("#inventoryTable tbody");
-        
+        const cardsWrap = document.getElementById("inventoryCards");
+
         if(allItems.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 font-medium">目前尚無庫存異動紀錄。請前往【進出作業】分頁登錄。</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-[var(--brown-300)] font-medium">目前尚無庫存異動紀錄。請前往【進出作業】分頁登錄。</td></tr>`;
+            cardsWrap.innerHTML = `<div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">目前尚無庫存異動紀錄。<br>請前往【進出作業】分頁登錄。</div>`;
             return;
         }
 
-        tbody.innerHTML = allItems.map(itemName => {
+        let tableHtml = "";
+        let cardsHtml = "";
+
+        allItems.forEach(itemName => {
             const itemSrcs = rawSources.filter(s => s.item === itemName);
             const totalA = itemSrcs.reduce((sum, s) => sum + s.qty, 0);
-            const detailsA = itemSrcs.map(s => `<span class="block text-xs text-slate-500">${s.source} : <b>${s.qty}</b> (${s.method})</span>`).join('');
+            const detailsA = itemSrcs.map(s => `<span class="block text-xs text-[var(--brown-400)]">${escapeHtml(s.source)} : <b>${s.qty}</b> (${escapeHtml(s.method)})</span>`).join('');
 
             const itemAllocs = rawAllocations.filter(a => a.item === itemName);
             const totalB = itemAllocs.reduce((sum, a) => sum + a.qty, 0);
             const detailsB = itemAllocs.map(a => {
                 const g = groups.find(g => g.id === a.groupId);
-                return `<span class="block text-xs text-slate-500">${g?g.name:'未知'} : <b>${a.qty}</b> (${a.user})</span>`;
+                return `<span class="block text-xs text-[var(--brown-400)]">${g?g.name:'未知'} : <b>${a.qty}</b> (${escapeHtml(a.user)})</span>`;
             }).join('');
 
             const totalC = rawReturns.filter(r => r.item === itemName).reduce((sum, r) => sum + r.qty, 0);
             const 流浪中 = totalB - totalC;
             const 庫房剩餘 = totalA - totalB + totalC;
 
-            return `
-                <tr class="hover:bg-slate-50/80 transition-colors">
-                    <td class="p-4 font-bold text-slate-900">${itemName}</td>
-                    <td class="p-4 font-bold text-slate-800">${totalA}</td>
+            tableHtml += `
+                <tr class="hover:bg-[var(--tan-100)]/60 transition-colors">
+                    <td class="p-4 font-bold text-[var(--brown-900)]">${escapeHtml(itemName)}</td>
+                    <td class="p-4 font-bold text-[var(--brown-800)]">${totalA}</td>
                     <td class="p-4">${detailsA || '-'}</td>
-                    <td class="p-4 font-bold text-blue-600">${totalB}</td>
+                    <td class="p-4 font-bold text-blue-700">${totalB}</td>
                     <td class="p-4">${detailsB || '-'}</td>
-                    <td class="p-4 font-bold text-emerald-600">${totalC}</td>
-                    <td class="p-4 font-bold ${流浪中 > 0 ? 'text-rose-600' : 'text-slate-400'}">${流浪中}</td>
-                    <td class="p-4 bg-slate-900 text-white font-black text-center text-base">${庫房剩餘}</td>
+                    <td class="p-4 font-bold text-emerald-700">${totalC}</td>
+                    <td class="p-4 font-bold ${流浪中 > 0 ? 'text-rose-600' : 'text-[var(--brown-300)]'}">${流浪中}</td>
+                    <td class="p-4 bg-[var(--brown-900)] text-[var(--cream)] font-black text-center text-base">${庫房剩餘}</td>
                 </tr>
             `;
-        }).join('');
+
+            cardsHtml += `
+                <div class="p-4 space-y-2.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <h4 class="font-black text-[var(--brown-900)] text-base">${escapeHtml(itemName)}</h4>
+                        <span class="bg-[var(--brown-900)] text-[var(--cream)] font-black text-lg px-3 py-1 rounded-lg shrink-0">${庫房剩餘}</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                        <div class="bg-[var(--tan-100)] rounded-lg py-1.5 border border-[var(--tan-300)]">
+                            <div class="font-bold text-[var(--brown-800)]">${totalA}</div><div class="text-[var(--brown-400)]">總借入</div>
+                        </div>
+                        <div class="bg-blue-50 rounded-lg py-1.5 border border-blue-100">
+                            <div class="font-bold text-blue-700">${totalB}</div><div class="text-blue-400">已領</div>
+                        </div>
+                        <div class="bg-emerald-50 rounded-lg py-1.5 border border-emerald-100">
+                            <div class="font-bold text-emerald-700">${totalC}</div><div class="text-emerald-400">已還</div>
+                        </div>
+                    </div>
+                    ${流浪中 > 0 ? `<div class="text-xs font-bold text-rose-600">⚠️ 流浪中：尚有 ${流浪中} 件未歸還</div>` : ''}
+                    <details class="text-xs text-[var(--brown-500)]">
+                        <summary class="cursor-pointer font-bold select-none py-1.5 min-h-[44px] flex items-center">📎 查看來源與分配明細</summary>
+                        <div class="mt-1 space-y-2 pl-2 border-l-2 border-[var(--tan-300)]">
+                            <div><b class="text-[var(--brown-700)]">來源：</b>${detailsA || '-'}</div>
+                            <div><b class="text-[var(--brown-700)]">分配：</b>${detailsB || '-'}</div>
+                        </div>
+                    </details>
+                </div>
+            `;
+        });
+
+        tbody.innerHTML = tableHtml;
+        cardsWrap.innerHTML = cardsHtml;
     }
 
     function renderTasksElement(snapshot) {
         const tbody = document.querySelector("#taskTable tbody");
+        const cardsWrap = document.getElementById("taskCards");
+
         if(snapshot.empty) {
-            tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-slate-400 font-medium">當前無指派任務</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-[var(--brown-300)] font-medium">當前無指派任務</td></tr>`;
+            cardsWrap.innerHTML = `<div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">當前無指派任務</div>`;
             return;
         }
 
-        let html = "";
+        let tableHtml = "";
+        let cardsHtml = "";
         snapshot.forEach(docSnap => {
             const t = docSnap.data();
             const id = docSnap.id;
             const g = groups.find(g => g.id === t.groupId);
             const isDone = t.status === "已完成";
+            const safeName = escapeHtml(t.name);
 
-            html += `
-                <tr class="hover:bg-slate-50 transition-colors">
-                    <td class="p-4 ${isDone ? 'status-done-line text-slate-400' : 'font-bold text-slate-800'}">
-                        ${isDone ? '🔹 ' : '🔸 '} ${t.name}
+            tableHtml += `
+                <tr class="hover:bg-[var(--tan-100)]/60 transition-colors">
+                    <td class="p-4 ${isDone ? 'status-done-line text-[var(--brown-300)]' : 'font-bold text-[var(--brown-800)]'}">
+                        ${isDone ? '🔹 ' : '🔸 '} ${safeName}
                     </td>
                     <td class="p-4">
-                        <span class="px-2.5 py-1 rounded-md text-xs font-bold ${isDone ? 'bg-slate-100 text-slate-400' : 'bg-orange-50 text-orange-600 border border-orange-100'}">
+                        <span class="px-2.5 py-1 rounded-md text-xs font-bold ${isDone ? 'bg-[var(--tan-100)] text-[var(--brown-300)]' : 'bg-orange-50 text-orange-700 border border-orange-200'}">
                             ${g ? g.name : '通用'}
                         </span>
                     </td>
                     <td class="p-4 text-right space-x-1 whitespace-nowrap">
-                        <button class="btn-complete-task bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold py-1 px-2.5 rounded text-xs transition" data-id="${id}" data-status="${t.status}">
+                        <button class="btn-complete-task bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold py-1 px-2.5 rounded text-xs transition" data-id="${id}" data-status="${t.status}">
                             ${isDone ? '↩️ 重啟' : '✅ 完成'}
                         </button>
-                        <button class="btn-edit-task bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold py-1 px-2.5 rounded text-xs transition" data-id="${id}" data-name="${t.name}">✏️ 改</button>
+                        <button class="btn-edit-task bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold py-1 px-2.5 rounded text-xs transition" data-id="${id}" data-name="${safeName}">✏️ 改</button>
                         <button class="btn-delete-task bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold py-1 px-2.5 rounded text-xs transition" data-id="${id}">❌ 刪</button>
                     </td>
                 </tr>
             `;
+
+            cardsHtml += `
+                <div class="p-4 space-y-3 ${isDone ? 'opacity-60' : ''}">
+                    <div class="flex items-start justify-between gap-2">
+                        <p class="font-bold text-sm ${isDone ? 'status-done-line text-[var(--brown-300)]' : 'text-[var(--brown-900)]'}">
+                            ${isDone ? '🔹' : '🔸'} ${safeName}
+                        </p>
+                        <span class="shrink-0 px-2 py-1 rounded-md text-[11px] font-bold ${isDone ? 'bg-[var(--tan-100)] text-[var(--brown-300)]' : 'bg-orange-50 text-orange-700 border border-orange-200'}">
+                            ${g ? g.name : '通用'}
+                        </span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="btn-complete-task btn flex-1 bg-blue-50 text-blue-700" data-id="${id}" data-status="${t.status}">
+                            ${isDone ? '↩️ 重啟' : '✅ 完成'}
+                        </button>
+                        <button class="btn-edit-task btn bg-amber-50 text-amber-700 px-4" data-id="${id}" data-name="${safeName}">✏️</button>
+                        <button class="btn-delete-task btn bg-rose-50 text-rose-600 px-4" data-id="${id}">❌</button>
+                    </div>
+                </div>
+            `;
         });
-        tbody.innerHTML = html;
+        tbody.innerHTML = tableHtml;
+        cardsWrap.innerHTML = cardsHtml;
 
         document.querySelectorAll('.btn-complete-task').forEach(b => {
             b.onclick = async () => {
