@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.6",
+        notes: "入庫登錄的借入方式新增「其他」選項，選取後會多跳出一個文字框讓你填寫自訂說明。領用簽收表單在輸入/選取物品名稱後，會即時顯示「目前庫房剩餘」數量；歸還登記表單在輸入物品名稱與選擇小組後，會即時顯示該小組目前領用中尚未歸還的數量，填寫前就知道可以填多少。若送出的數量超過可用量，會先跳出確認視窗而不是直接擋下，避免因為系統資料誤差而卡住現場作業。"
+    },
+    {
         version: "v0.0.5",
         notes: "修正「專案管理」新增／刪除無回應的問題：新增專案、新增小組原本沒有錯誤處理，Firestore 寫入被拒絕時會完全無聲失敗；讀取專案清單的監聽器也沒有錯誤回呼，權限被拒時會卡在「資料庫同步中...」不會顯示原因。現在所有失敗都會跳出明確錯誤訊息（含 permission-denied 時提示檢查 Firestore 安全性規則），並在專案清單讀取失敗時於畫面上顯示錯誤提示。"
     },
@@ -421,7 +425,11 @@ function renderAllChips() {
             `<button type="button" class="qp-chip" data-value="${escapeHtml(q.value)}">${escapeHtml(q.value)}</button>`
         ).join('');
         container.querySelectorAll('.qp-chip').forEach(btn => {
-            btn.onclick = () => { document.getElementById(inputId).value = btn.dataset.value; };
+            btn.onclick = () => {
+                const input = document.getElementById(inputId);
+                input.value = btn.dataset.value;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            };
         });
     });
 }
@@ -506,6 +514,55 @@ function sourceTypeIcon(sourceType) {
     return '📦';
 }
 
+// 該物品目前的庫房剩餘（總借入 - 組別已領 + 已還）
+function getItemRemaining(itemName) {
+    const totalA = rawSources.filter(s => s.item === itemName).reduce((sum, s) => sum + s.qty, 0);
+    const totalB = rawAllocations.filter(a => a.item === itemName).reduce((sum, a) => sum + a.qty, 0);
+    const totalC = rawReturns.filter(r => r.item === itemName).reduce((sum, r) => sum + r.qty, 0);
+    return totalA - totalB + totalC;
+}
+
+// 該小組目前領用中、尚未歸還的某物品數量
+function getGroupOutstanding(itemName, groupId) {
+    const allocated = rawAllocations.filter(a => a.item === itemName && String(a.groupId) === String(groupId)).reduce((sum, a) => sum + a.qty, 0);
+    const returned = rawReturns.filter(r => r.item === itemName && String(r.groupId) === String(groupId)).reduce((sum, r) => sum + r.qty, 0);
+    return allocated - returned;
+}
+
+function updateAllocStockHint() {
+    const el = document.getElementById('allocItemStock');
+    if (!el) return;
+    const itemName = document.getElementById('allocItem').value.trim();
+    if (!itemName) { el.textContent = ''; return; }
+    const knownItem = rawSources.some(s => s.item === itemName) || rawAllocations.some(a => a.item === itemName);
+    if (!knownItem) {
+        el.textContent = '⚠️ 系統內尚無此物品的庫存資料';
+        el.className = 'text-xs font-bold mt-1.5 min-h-[1em] text-amber-600';
+        return;
+    }
+    const remaining = getItemRemaining(itemName);
+    el.textContent = `📦 目前庫房剩餘：${remaining} 件`;
+    el.className = `text-xs font-bold mt-1.5 min-h-[1em] ${remaining > 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+}
+
+function updateRetOutstandingHint() {
+    const el = document.getElementById('retOutstandingHint');
+    if (!el) return;
+    const itemName = document.getElementById('retItem').value.trim();
+    const groupId = document.getElementById('retGroup').value;
+    if (!itemName || !groupId) { el.textContent = ''; return; }
+    const g = findGroupByStoredId(groupId);
+    const groupLabel = g ? g.name : '此小組';
+    const outstanding = getGroupOutstanding(itemName, groupId);
+    if (outstanding <= 0) {
+        el.textContent = `⚠️ ${groupLabel} 目前沒有登記中的「${itemName}」可歸還`;
+        el.className = 'md:col-span-5 text-xs font-bold min-h-[1em] text-amber-600';
+        return;
+    }
+    el.textContent = `↩️ ${groupLabel} 目前領用中尚未歸還：${outstanding} 件`;
+    el.className = 'md:col-span-5 text-xs font-bold min-h-[1em] text-blue-700';
+}
+
 // ============ 物資總表 ============
 function calculateAndRenderInventory() {
     const allItems = Array.from(new Set([...rawSources.map(s => s.item), ...rawAllocations.map(a => a.item), ...rawReturns.map(r => r.item)]));
@@ -516,6 +573,8 @@ function calculateAndRenderInventory() {
     if (allItems.length === 0) {
         tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-[var(--brown-300)] font-medium">目前尚無庫存異動紀錄。請前往【進出作業】分頁登錄。</td></tr>`;
         cardsWrap.innerHTML = `<div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">目前尚無庫存異動紀錄。<br>請前往【進出作業】分頁登錄。</div>`;
+        updateAllocStockHint();
+        updateRetOutstandingHint();
         return;
     }
 
@@ -586,6 +645,9 @@ function calculateAndRenderInventory() {
 
     tbody.innerHTML = tableHtml;
     cardsWrap.innerHTML = cardsHtml;
+
+    updateAllocStockHint();
+    updateRetOutstandingHint();
 }
 
 // ============ 版本紀錄（卡片式，收合預設，點擊才展開） ============
@@ -684,21 +746,34 @@ function bindGlobalEvents() {
         if (e.key === 'Enter') { e.preventDefault(); addGroup(); }
     });
 
+    document.getElementById('srcMethod').addEventListener('change', (e) => {
+        document.getElementById('srcMethodOther').classList.toggle('hidden', e.target.value !== '其他');
+    });
+
+    document.getElementById('allocItem').addEventListener('input', updateAllocStockHint);
+    document.getElementById('retItem').addEventListener('input', updateRetOutstandingHint);
+    document.getElementById('retGroup').addEventListener('change', updateRetOutstandingHint);
+
     document.getElementById('btnSrcSubmit').onclick = async () => {
         if (!currentProjectId) return;
         const item = document.getElementById('srcItem').value.trim();
         const sourceType = document.getElementById('srcType').value;
         const source = document.getElementById('srcUnit').value.trim();
         const qty = parseInt(document.getElementById('srcQty').value);
-        const method = document.getElementById('srcMethod').value;
+        const methodSelect = document.getElementById('srcMethod').value;
+        const methodOther = document.getElementById('srcMethodOther').value.trim();
+        const method = methodSelect === '其他' ? methodOther : methodSelect;
         const note = document.getElementById('srcNote').value.trim();
         if (!item || !source || isNaN(qty)) return alert("請完整填寫項目、來源與數量");
+        if (methodSelect === '其他' && !methodOther) return alert("請填寫「其他」借入方式的說明");
 
         const serial = await getNextSerialNumber();
         await addDoc(collection(db, 'projects', currentProjectId, 'sources'), { item, sourceType, source, qty, method, note, serial, timestamp: new Date() });
         await ensureQuickpick('item', item);
         await ensureQuickpick('source', source);
         document.getElementById('srcItem').value = ''; document.getElementById('srcQty').value = '';
+        document.getElementById('srcMethodOther').value = ''; document.getElementById('srcMethodOther').classList.add('hidden');
+        document.getElementById('srcMethod').value = '借據';
     };
 
     document.getElementById('btnAllocSubmit').onclick = async () => {
@@ -709,11 +784,17 @@ function bindGlobalEvents() {
         const user = document.getElementById('allocUser').value.trim();
         if (!item || isNaN(qty) || !user) return alert("填寫不完整");
 
+        const remaining = getItemRemaining(item);
+        if (qty > remaining) {
+            if (!confirm(`目前庫房剩餘只有 ${remaining} 件「${item}」，仍要領用 ${qty} 件嗎？`)) return;
+        }
+
         const serial = await getNextSerialNumber();
         await addDoc(collection(db, 'projects', currentProjectId, 'allocations'), { item, groupId, qty, user, serial, timestamp: new Date() });
         await ensureQuickpick('item', item);
         await ensureQuickpick('person', user);
         document.getElementById('allocItem').value = ''; document.getElementById('allocQty').value = '';
+        updateAllocStockHint();
     };
 
     document.getElementById('btnRetSubmit').onclick = async () => {
@@ -725,11 +806,18 @@ function bindGlobalEvents() {
         const note = document.getElementById('retNote').value.trim();
         if (!item || isNaN(qty) || !receiver) return alert("填寫不完整");
 
+        const outstanding = getGroupOutstanding(item, groupId);
+        if (qty > outstanding) {
+            const g = findGroupByStoredId(groupId);
+            if (!confirm(`${g ? g.name : '此小組'} 目前登記中的「${item}」只有 ${outstanding} 件，仍要歸還 ${qty} 件嗎？`)) return;
+        }
+
         const serial = await getNextSerialNumber();
         await addDoc(collection(db, 'projects', currentProjectId, 'returns'), { item, groupId, qty, receiver, note, serial, timestamp: new Date() });
         await ensureQuickpick('item', item);
         await ensureQuickpick('person', receiver);
         document.getElementById('retItem').value = ''; document.getElementById('retQty').value = '';
+        updateRetOutstandingHint();
     };
 
     document.querySelectorAll('.btn-add-qp').forEach(b => {
