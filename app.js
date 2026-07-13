@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.5",
+        notes: "修正「專案管理」新增／刪除無回應的問題：新增專案、新增小組原本沒有錯誤處理，Firestore 寫入被拒絕時會完全無聲失敗；讀取專案清單的監聽器也沒有錯誤回呼，權限被拒時會卡在「資料庫同步中...」不會顯示原因。現在所有失敗都會跳出明確錯誤訊息（含 permission-denied 時提示檢查 Firestore 安全性規則），並在專案清單讀取失敗時於畫面上顯示錯誤提示。"
+    },
+    {
         version: "v0.0.4",
         notes: "入庫登錄新增「來源類型」欄位，區分🌐外部借入（跟外單位借，如302旅）與🏠自有物資（本單位既有的東西），物資總表的來源明細會顯示對應標籤。所有物資進出（入庫／領用／歸還）都會透過 Firestore transaction 自動配發全專案共用的流水單號，總表的來源明細與分配明細前面會標示單號方便查核追蹤。"
     },
@@ -167,12 +171,23 @@ async function seedDefaultGroups(projectId) {
 }
 
 // ============ Level 0：專案主控台 ============
+function firestoreErrorMessage(context, err) {
+    console.error(`[Firestore] ${context}`, err);
+    if (err && err.code === 'permission-denied') {
+        return `${context}失敗：Firestore 權限不足 (permission-denied)。請檢查 Firebase Console 的 Firestore 安全性規則是否允許讀寫（test mode 規則有 30 天期限，過期後會全部拒絕）。`;
+    }
+    return `${context}失敗：${err && err.message ? err.message : err}`;
+}
+
 function setupProjectListListener() {
     const qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'asc'));
     onSnapshot(qProjects, (snap) => {
         rawProjects = [];
         snap.forEach(d => rawProjects.push({ docId: d.id, ...d.data() }));
         renderProjectList();
+    }, (err) => {
+        const el = document.getElementById('projectList');
+        if (el) el.innerHTML = `<div class="p-6 text-center text-rose-600 font-medium text-sm">⚠️ ${escapeHtml(firestoreErrorMessage('讀取專案清單', err))}</div>`;
     });
 }
 
@@ -204,9 +219,13 @@ async function addProject() {
     const input = document.getElementById('newProjectName');
     const name = input.value.trim();
     if (!name) return alert('請輸入專案名稱');
-    const ref = await addDoc(collection(db, 'projects'), { name, createdAt: new Date() });
-    await seedDefaultGroups(ref.id);
-    input.value = '';
+    try {
+        const ref = await addDoc(collection(db, 'projects'), { name, createdAt: new Date() });
+        await seedDefaultGroups(ref.id);
+        input.value = '';
+    } catch (err) {
+        alert(firestoreErrorMessage('新增專案', err));
+    }
 }
 
 async function deleteProject(projectId, projectName) {
@@ -222,8 +241,7 @@ async function deleteProject(projectId, projectName) {
         await deleteDoc(doc(db, 'projects', projectId));
         if (currentProjectId === projectId) exitProject();
     } catch (err) {
-        console.warn('刪除專案失敗', err);
-        alert('刪除專案時發生錯誤，請稍後再試一次。');
+        alert(firestoreErrorMessage('刪除專案', err));
     }
 }
 
@@ -250,15 +268,15 @@ function enterProject(projectId, projectName) {
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'sources'), (snap) => {
         rawSources = []; snap.forEach(d => rawSources.push(d.data()));
         calculateAndRenderInventory();
-    }));
+    }, (err) => firestoreErrorMessage('讀取物資來源', err)));
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'allocations'), (snap) => {
         rawAllocations = []; snap.forEach(d => rawAllocations.push(d.data()));
         calculateAndRenderInventory();
-    }));
+    }, (err) => firestoreErrorMessage('讀取領用紀錄', err)));
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'returns'), (snap) => {
         rawReturns = []; snap.forEach(d => rawReturns.push(d.data()));
         calculateAndRenderInventory();
-    }));
+    }, (err) => firestoreErrorMessage('讀取歸還紀錄', err)));
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'groups'), (snap) => {
         rawGroups = [];
         snap.forEach(d => rawGroups.push({ docId: d.id, ...d.data() }));
@@ -266,13 +284,17 @@ function enterProject(projectId, projectName) {
         renderGroupSelects();
         renderGroupSettings();
         calculateAndRenderInventory();
+    }, (err) => {
+        firestoreErrorMessage('讀取小組名單', err);
+        const el = document.getElementById('groupList');
+        if (el) el.innerHTML = `<div class="text-xs text-rose-600 py-2">⚠️ 小組名單讀取失敗，請檢查網路連線或 Firestore 權限設定。</div>`;
     }));
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'quickpicks'), (snap) => {
         rawQuickpicks = [];
         snap.forEach(d => rawQuickpicks.push({ docId: d.id, ...d.data() }));
         renderAllChips();
         renderQuickpickSettings();
-    }));
+    }, (err) => firestoreErrorMessage('讀取快捷選項', err)));
 }
 
 function exitProject() {
@@ -366,9 +388,13 @@ async function addGroup() {
     const input = document.getElementById('newGroupName');
     const name = input.value.trim();
     if (!name) return;
-    const maxOrder = rawGroups.reduce((m, g) => Math.max(m, g.order ?? 0), -1);
-    await addDoc(collection(db, 'projects', currentProjectId, 'groups'), { name, order: maxOrder + 1 });
-    input.value = '';
+    try {
+        const maxOrder = rawGroups.reduce((m, g) => Math.max(m, g.order ?? 0), -1);
+        await addDoc(collection(db, 'projects', currentProjectId, 'groups'), { name, order: maxOrder + 1 });
+        input.value = '';
+    } catch (err) {
+        alert(firestoreErrorMessage('新增小組', err));
+    }
 }
 
 // ============ 快捷選取清單（逐專案獨立） ============
