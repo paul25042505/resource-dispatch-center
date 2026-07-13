@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.10",
+        notes: "入庫來源紀錄每一筆新增「⋮」選單，可以編輯或刪除該筆紀錄。編輯會開啟彈窗表單，可修改物品、來源類型、來源/存放位置、數量、借入方式（含其他說明）與備註；刪除前會先跳出確認視窗。"
+    },
+    {
         version: "v0.0.9",
         notes: "瀏覽畫面停用手機的雙指縮放/放大手勢，操作更像原生 App。物資總表卡片的來源明細，在🌐/🏠圖示前面補上物品名稱，跟入庫來源紀錄的呈現方式一致。"
     },
@@ -282,7 +286,7 @@ function enterProject(projectId, projectName) {
     window.switchSubtab('in');
 
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'sources'), (snap) => {
-        rawSources = []; snap.forEach(d => rawSources.push(d.data()));
+        rawSources = []; snap.forEach(d => rawSources.push({ docId: d.id, ...d.data() }));
         calculateAndRenderInventory();
         renderSourceLog();
     }, (err) => firestoreErrorMessage('讀取物資來源', err)));
@@ -749,20 +753,118 @@ function renderSourceLog() {
         const serial = formatSerial(s.serial);
         const sourceLabel = s.sourceType === 'own' ? '存放位置' : '來源';
         return `
-            <details>
-                <summary class="px-4 py-3 min-h-[44px] flex items-center justify-between gap-2 cursor-pointer select-none">
-                    <span class="font-bold text-[var(--brown-900)] text-sm truncate">${serial ? `<span class="text-[var(--brown-400)] font-normal">${serial}</span> ` : ''}${escapeHtml(s.item)}</span>
-                    <span class="text-xs text-[var(--brown-500)] font-bold shrink-0">x${s.qty} ▾</span>
-                </summary>
-                <div class="px-4 pb-3 text-xs text-[var(--brown-500)] space-y-1">
-                    <div>${sourceTypeIcon(s.sourceType)} ${sourceLabel}：${escapeHtml(s.source)}</div>
-                    <div>📜 借入方式：${escapeHtml(s.method)}</div>
-                    <div>📝 備註：${s.note ? escapeHtml(s.note) : '-'}</div>
-                    <div>🕒 登錄時間：${formatTimestamp(s.timestamp)}</div>
+            <div class="relative">
+                <details>
+                    <summary class="px-4 py-3 min-h-[44px] flex items-center justify-between gap-2 cursor-pointer select-none">
+                        <span class="font-bold text-[var(--brown-900)] text-sm truncate">${serial ? `<span class="text-[var(--brown-400)] font-normal">${serial}</span> ` : ''}${escapeHtml(s.item)}</span>
+                        <span class="flex items-center gap-1.5 shrink-0">
+                            <span class="text-xs text-[var(--brown-500)] font-bold">x${s.qty} ▾</span>
+                            <button type="button" class="src-menu-btn qp-icon-btn text-[var(--brown-500)]" data-id="${s.docId}">⋮</button>
+                        </span>
+                    </summary>
+                    <div class="px-4 pb-3 text-xs text-[var(--brown-500)] space-y-1">
+                        <div>${sourceTypeIcon(s.sourceType)} ${sourceLabel}：${escapeHtml(s.source)}</div>
+                        <div>📜 借入方式：${escapeHtml(s.method)}</div>
+                        <div>📝 備註：${s.note ? escapeHtml(s.note) : '-'}</div>
+                        <div>🕒 登錄時間：${formatTimestamp(s.timestamp)}</div>
+                    </div>
+                </details>
+                <div class="src-menu hidden absolute right-4 top-11 z-20 card p-1.5 flex flex-col gap-1 min-w-[110px]" data-menu-for="${s.docId}">
+                    <button type="button" class="src-edit qp-row w-full text-left px-3 text-xs font-bold text-amber-700">✏️ 編輯</button>
+                    <button type="button" class="src-delete qp-row w-full text-left px-3 text-xs font-bold text-rose-600">❌ 刪除</button>
                 </div>
-            </details>
+            </div>
         `;
     }).join('');
+
+    document.querySelectorAll('.src-menu-btn').forEach(btn => {
+        btn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const menu = document.querySelector(`.src-menu[data-menu-for="${btn.dataset.id}"]`);
+            const isHidden = menu.classList.contains('hidden');
+            document.querySelectorAll('.src-menu').forEach(m => m.classList.add('hidden'));
+            if (isHidden) menu.classList.remove('hidden');
+        };
+    });
+    document.querySelectorAll('.src-edit').forEach(btn => {
+        btn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const docId = btn.closest('.src-menu').dataset.menuFor;
+            document.querySelectorAll('.src-menu').forEach(m => m.classList.add('hidden'));
+            openEditSourceModal(docId);
+        };
+    });
+    document.querySelectorAll('.src-delete').forEach(btn => {
+        btn.onclick = async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const docId = btn.closest('.src-menu').dataset.menuFor;
+            document.querySelectorAll('.src-menu').forEach(m => m.classList.add('hidden'));
+            const rec = rawSources.find(s => s.docId === docId);
+            if (!confirm(`確定刪除這筆入庫紀錄？${rec ? `（${rec.item} x${rec.qty}）` : ''}此動作無法復原。`)) return;
+            try {
+                await deleteDoc(doc(db, 'projects', currentProjectId, 'sources', docId));
+            } catch (err) {
+                alert(firestoreErrorMessage('刪除入庫紀錄', err));
+            }
+        };
+    });
+}
+
+let editingSourceId = null;
+
+function openEditSourceModal(docId) {
+    const rec = rawSources.find(s => s.docId === docId);
+    if (!rec) return;
+    editingSourceId = docId;
+    document.getElementById('editSrcItem').value = rec.item || '';
+    document.getElementById('editSrcType').value = rec.sourceType === 'own' ? 'own' : 'external';
+    document.getElementById('editSrcUnit').value = rec.source || '';
+    document.getElementById('editSrcQty').value = rec.qty ?? '';
+
+    const knownMethods = ['借據', '刷臉'];
+    const methodOtherInput = document.getElementById('editSrcMethodOther');
+    if (knownMethods.includes(rec.method)) {
+        document.getElementById('editSrcMethod').value = rec.method;
+        methodOtherInput.value = '';
+        methodOtherInput.classList.add('hidden');
+    } else {
+        document.getElementById('editSrcMethod').value = '其他';
+        methodOtherInput.value = rec.method || '';
+        methodOtherInput.classList.remove('hidden');
+    }
+    document.getElementById('editSrcNote').value = rec.note || '';
+    document.getElementById('editSourceModal').classList.remove('hidden');
+}
+
+function closeEditSourceModal() {
+    editingSourceId = null;
+    document.getElementById('editSourceModal').classList.add('hidden');
+}
+
+async function saveEditedSource() {
+    if (!editingSourceId || !currentProjectId) return;
+    const item = document.getElementById('editSrcItem').value.trim();
+    const sourceType = document.getElementById('editSrcType').value;
+    const source = document.getElementById('editSrcUnit').value.trim();
+    const qty = parseInt(document.getElementById('editSrcQty').value);
+    const methodSelect = document.getElementById('editSrcMethod').value;
+    const methodOther = document.getElementById('editSrcMethodOther').value.trim();
+    const method = methodSelect === '其他' ? methodOther : methodSelect;
+    const note = document.getElementById('editSrcNote').value.trim();
+    if (!item || !source || isNaN(qty)) return alert('請完整填寫項目、來源與數量');
+    if (methodSelect === '其他' && !methodOther) return alert('請填寫「其他」借入方式的說明');
+
+    try {
+        await updateDoc(doc(db, 'projects', currentProjectId, 'sources', editingSourceId), { item, sourceType, source, qty, method, note });
+        await ensureQuickpick('item', item);
+        await ensureQuickpick('source', source);
+        closeEditSourceModal();
+    } catch (err) {
+        alert(firestoreErrorMessage('儲存修改', err));
+    }
 }
 
 // ============ 版本紀錄（卡片式，收合預設，點擊才展開） ============
@@ -864,6 +966,19 @@ function bindGlobalEvents() {
     };
     document.getElementById('changelogModal').addEventListener('click', (e) => {
         if (e.target.id === 'changelogModal') e.currentTarget.classList.add('hidden');
+    });
+
+    document.getElementById('btnCloseEditSource').onclick = closeEditSourceModal;
+    document.getElementById('editSourceModal').addEventListener('click', (e) => {
+        if (e.target.id === 'editSourceModal') closeEditSourceModal();
+    });
+    document.getElementById('editSrcMethod').addEventListener('change', (e) => {
+        document.getElementById('editSrcMethodOther').classList.toggle('hidden', e.target.value !== '其他');
+    });
+    document.getElementById('btnSaveEditSource').onclick = saveEditedSource;
+
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.src-menu').forEach(m => m.classList.add('hidden'));
     });
 
     document.getElementById('btnAddGroup').onclick = addGroup;
