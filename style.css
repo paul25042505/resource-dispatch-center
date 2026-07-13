@@ -23,6 +23,19 @@ body {
     background-image: radial-gradient(circle, rgba(107,66,38,0.08) 1px, transparent 1px);
     background-size: 18px 18px;
     overscroll-behavior-y: contain;
+    line-height: 1.8;
+    letter-spacing: 0.02em;
+}
+
+/* 標題：拉開字距展現氣勢（h3 是全站卡片/區塊標題實際使用的層級） */
+h1, h2, h3, .card-header {
+    letter-spacing: 0.05em;
+}
+
+/* 統計數字：細字重＋拉開字距，跟一般文字做出區隔 */
+.stat-value {
+    font-weight: 300;
+    letter-spacing: 0.1em;
 }
 .status-done-line { text-decoration: line-through; opacity: 0.55; }
 .card {
@@ -51,10 +64,12 @@ body {
 .field::placeholder { color: var(--brown-300); }
 .btn {
     min-height: 44px;
-    border-radius: 0.65rem;
-    font-weight: 700;
+    border-radius: 4px;
+    border: 2px solid currentColor;
+    font-weight: 600;
     font-size: 0.875rem;
-    padding: 0.6rem 1.25rem;
+    padding: 12px 24px;
+    text-transform: uppercase;
     transition: transform .05s ease, filter .15s ease;
     box-shadow: 0 2px 0 rgba(0,0,0,0.15);
 }
