@@ -6,6 +6,9 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
          新增底部導覽列與上方子選單列；按鈕與輸入框觸控面積調整至 44x44px 以上；
          物資總表在手機版改為卡片式檢視以提升可讀性；任務列表新增手機卡片版；
          修正 Firebase 重複初始化與無效 bare-specifier import 導致頁面無法執行的錯誤。
+v0.0.2 - 底部導覽列新增「設定」分頁：可檢視完整版本紀錄，並管理物品名稱／來源單位／
+         經辦人員的快捷選取清單（新增、編輯、刪除、排序）。物資進出作業表單新增快捷
+         選取按鈕，首次手動輸入送出後會自動儲存為快捷選項，下次可直接點選免打字。
 -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -102,6 +105,28 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
             background: var(--tan-100);
             border: 1px solid var(--tan-300);
         }
+        .qp-chip {
+            min-height: 40px;
+            padding: 0.4rem 0.85rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            background: var(--paper);
+            border: 1px solid var(--tan-300);
+            color: var(--brown-700);
+            transition: filter .15s ease;
+        }
+        .qp-chip:active { filter: brightness(0.95); }
+        .qp-row {
+            min-height: 44px;
+            background: var(--paper);
+            border: 1px solid var(--tan-300);
+            border-radius: 0.65rem;
+        }
+        .qp-icon-btn {
+            min-width: 36px;
+            min-height: 36px;
+        }
     </style>
 </head>
 <body class="text-[var(--brown-900)] antialiased min-h-screen">
@@ -169,8 +194,14 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
                 <span class="w-1.5 h-4 bg-[var(--clay)] rounded-full"></span> 📥 原始物資借入登錄 (入庫房)
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-5 gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
-                <input type="text" id="srcItem" placeholder="物品(如:無線電)" class="field">
-                <input type="text" id="srcUnit" placeholder="來源單位(如:二連)" class="field">
+                <div>
+                    <input type="text" id="srcItem" placeholder="物品(如:無線電)" class="field">
+                    <div id="qpChips-srcItem" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                </div>
+                <div>
+                    <input type="text" id="srcUnit" placeholder="來源單位(如:二連)" class="field">
+                    <div id="qpChips-srcUnit" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                </div>
                 <input type="number" id="srcQty" placeholder="數量" min="1" class="field">
                 <select id="srcMethod" class="field">
                     <option value="借據">📜 書面借據</option>
@@ -186,10 +217,16 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
                 <span class="w-1.5 h-4 bg-blue-600 rounded-full"></span> 📤 組別物資領用簽收 (分發出去)
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
-                <input type="text" id="allocItem" placeholder="物品名稱" class="field">
+                <div>
+                    <input type="text" id="allocItem" placeholder="物品名稱" class="field">
+                    <div id="qpChips-allocItem" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                </div>
                 <select id="allocGroup" class="field"></select>
                 <input type="number" id="allocQty" placeholder="數量" min="1" class="field">
-                <input type="text" id="allocUser" placeholder="領用人簽名" class="field">
+                <div>
+                    <input type="text" id="allocUser" placeholder="領用人簽名" class="field">
+                    <div id="qpChips-allocUser" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                </div>
                 <button id="btnAllocSubmit" class="btn md:col-span-4 w-full md:w-auto ml-auto block" style="background:#2563eb;color:var(--cream);">確認發放</button>
             </div>
         </div>
@@ -199,10 +236,16 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
                 <span class="w-1.5 h-4 bg-[var(--olive)] rounded-full"></span> ↩️ 各組物資歸還登錄 (返回倉庫)
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-5 gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
-                <input type="text" id="retItem" placeholder="物品名稱" class="field">
+                <div>
+                    <input type="text" id="retItem" placeholder="物品名稱" class="field">
+                    <div id="qpChips-retItem" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                </div>
                 <select id="retGroup" class="field"></select>
                 <input type="number" id="retQty" placeholder="數量" min="1" class="field">
-                <input type="text" id="retReceiver" placeholder="收回點收人" class="field">
+                <div>
+                    <input type="text" id="retReceiver" placeholder="收回點收人" class="field">
+                    <div id="qpChips-retReceiver" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+                </div>
                 <input type="text" id="retNote" placeholder="物品損壞狀況備註" class="field">
                 <button id="btnRetSubmit" class="btn btn-olive md:col-span-5 w-full md:w-auto ml-auto block">確認歸還</button>
             </div>
@@ -239,8 +282,56 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
         </div>
     </main>
 
+    <main id="page-settings" class="tab-page hidden space-y-4">
+        <div class="card p-4 md:p-6 space-y-5">
+            <div>
+                <h3 class="font-bold text-[var(--brown-900)] text-base flex items-center gap-2 font-serif-tc">
+                    <span class="w-1.5 h-4 bg-[var(--brown-700)] rounded-full"></span> ⚙️ 快捷選取清單管理
+                </h3>
+                <p class="text-xs text-[var(--brown-400)] mt-1.5 leading-relaxed">
+                    物品、來源單位、經辦人員第一次可先手動輸入，送出表單後會自動存成快捷選項，
+                    下次在表單中點一下即可快速選取。也可以在這裡直接新增、編輯、刪除或排序。
+                </p>
+            </div>
+
+            <div class="space-y-2">
+                <h4 class="font-bold text-sm text-[var(--brown-800)]">📦 物品名稱</h4>
+                <div class="flex gap-2">
+                    <input type="text" id="qpNewInput-item" placeholder="新增物品快捷選項" class="field flex-1">
+                    <button class="btn btn-clay btn-add-qp" data-category="item" data-input="qpNewInput-item">新增</button>
+                </div>
+                <div id="qpList-item" class="space-y-1.5"></div>
+            </div>
+
+            <div class="space-y-2">
+                <h4 class="font-bold text-sm text-[var(--brown-800)]">🚚 來源單位</h4>
+                <div class="flex gap-2">
+                    <input type="text" id="qpNewInput-source" placeholder="新增來源單位快捷選項" class="field flex-1">
+                    <button class="btn btn-clay btn-add-qp" data-category="source" data-input="qpNewInput-source">新增</button>
+                </div>
+                <div id="qpList-source" class="space-y-1.5"></div>
+            </div>
+
+            <div class="space-y-2">
+                <h4 class="font-bold text-sm text-[var(--brown-800)]">🧑 經辦人員</h4>
+                <div class="flex gap-2">
+                    <input type="text" id="qpNewInput-person" placeholder="新增經辦人員快捷選項" class="field flex-1">
+                    <button class="btn btn-clay btn-add-qp" data-category="person" data-input="qpNewInput-person">新增</button>
+                </div>
+                <div id="qpList-person" class="space-y-1.5"></div>
+            </div>
+        </div>
+
+        <div class="card p-4 md:p-6 space-y-3">
+            <h3 class="font-bold text-[var(--brown-900)] text-base flex items-center gap-2 font-serif-tc">
+                <span class="w-1.5 h-4 bg-[var(--brown-700)] rounded-full"></span> 🗂️ 版本紀錄
+            </h3>
+            <div id="changeLogList" class="space-y-3 text-sm"></div>
+        </div>
+    </main>
+
     <p class="hidden md:flex justify-end pr-1">
-        <span class="version-badge px-2 py-1 rounded-md">v0.0.1</span>
+        <span class="version-badge px-2 py-1 rounded-md">v0.0.2</span>
     </p>
 </div>
 
@@ -261,8 +352,13 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
         <span class="tab-icon">📋</span>
         <span class="tab-label">任務調度</span>
     </button>
+    <button id="btn-tab-settings" onclick="switchTab('settings')" class="tab-btn flex-1 flex flex-col items-center justify-center gap-0.5 relative">
+        <span class="tab-indicator absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-[var(--clay)]"></span>
+        <span class="tab-icon">⚙️</span>
+        <span class="tab-label">設定</span>
+    </button>
     <div class="md:hidden flex items-center pr-2">
-        <span class="version-badge px-1.5 py-0.5 rounded whitespace-nowrap">v0.0.1</span>
+        <span class="version-badge px-1.5 py-0.5 rounded whitespace-nowrap">v0.0.2</span>
     </div>
 </nav>
 
@@ -293,12 +389,40 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
         { id: 5, name: "教管二組 (子)" }
     ];
 
-    let rawSources = [], rawAllocations = [], rawReturns = [];
+    let rawSources = [], rawAllocations = [], rawReturns = [], rawQuickpicks = [];
+
+    // 版本紀錄（與檔案開頭 Change Log 註解同步維護）
+    const CHANGELOG = [
+        {
+            version: "v0.0.2",
+            notes: "底部導覽列新增「設定」分頁：可檢視完整版本紀錄，並管理物品名稱／來源單位／經辦人員的快捷選取清單（新增、編輯、刪除、排序）。物資進出作業表單新增快捷選取按鈕，首次手動輸入送出後會自動儲存為快捷選項，下次可直接點選免打字。"
+        },
+        {
+            version: "v0.0.1",
+            notes: "全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度所」；改為手機優先版面，新增底部導覽列與上方子選單列；按鈕與輸入框觸控面積調整至 44x44px 以上；物資總表在手機版改為卡片式檢視以提升可讀性；任務列表新增手機卡片版；修正 Firebase 重複初始化與無效 bare-specifier import 導致頁面無法執行的錯誤。"
+        }
+    ];
+
+    const QP_CATEGORIES = {
+        item: { label: "物品名稱", listId: "qpList-item" },
+        source: { label: "來源單位", listId: "qpList-source" },
+        person: { label: "經辦人員", listId: "qpList-person" }
+    };
+    // 表單欄位對應的快捷選取分類與 chips 容器
+    const QP_FIELD_BINDINGS = [
+        { inputId: "srcItem", chipsId: "qpChips-srcItem", category: "item" },
+        { inputId: "srcUnit", chipsId: "qpChips-srcUnit", category: "source" },
+        { inputId: "allocItem", chipsId: "qpChips-allocItem", category: "item" },
+        { inputId: "allocUser", chipsId: "qpChips-allocUser", category: "person" },
+        { inputId: "retItem", chipsId: "qpChips-retItem", category: "item" },
+        { inputId: "retReceiver", chipsId: "qpChips-retReceiver", category: "person" }
+    ];
 
     window.addEventListener('DOMContentLoaded', () => {
         renderGroupSelects();
         setupRealtimeListeners();
         bindFormEvents();
+        renderChangeLog();
     });
 
     // 處理頁面 Tab 切換邏輯（底部導覽列）
@@ -338,6 +462,8 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
             if(!item || !source || isNaN(qty)) return alert("請完整填寫項目、來源與數量");
 
             await addDoc(collection(db, "sources"), { item, source, qty, method, note, timestamp: new Date() });
+            await ensureQuickpick('item', item);
+            await ensureQuickpick('source', source);
             document.getElementById('srcItem').value = ''; document.getElementById('srcQty').value = '';
         };
 
@@ -349,6 +475,8 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
             if(!item || isNaN(qty) || !user) return alert("填寫不完整");
 
             await addDoc(collection(db, "allocations"), { item, groupId, qty, user, timestamp: new Date() });
+            await ensureQuickpick('item', item);
+            await ensureQuickpick('person', user);
             document.getElementById('allocItem').value = ''; document.getElementById('allocQty').value = '';
         };
 
@@ -361,6 +489,8 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
             if(!item || isNaN(qty) || !receiver) return alert("填寫不完整");
 
             await addDoc(collection(db, "returns"), { item, groupId, qty, receiver, note, timestamp: new Date() });
+            await ensureQuickpick('item', item);
+            await ensureQuickpick('person', receiver);
             document.getElementById('retItem').value = ''; document.getElementById('retQty').value = '';
         };
 
@@ -372,6 +502,23 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
             await addDoc(collection(db, "tasks"), { name, groupId, status: "未開始", timestamp: new Date() });
             document.getElementById('taskName').value = '';
         };
+
+        document.querySelectorAll('.btn-add-qp').forEach(b => {
+            b.onclick = async () => {
+                const input = document.getElementById(b.dataset.input);
+                const ok = await ensureQuickpick(b.dataset.category, input.value);
+                if (ok) input.value = '';
+                else if (input.value.trim()) alert("這個快捷選項已經存在囉");
+            };
+        });
+        document.querySelectorAll('[id^="qpNewInput-"]').forEach(input => {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.querySelector(`.btn-add-qp[data-input="${input.id}"]`).click();
+                }
+            });
+        });
     }
 
     function setupRealtimeListeners() {
@@ -391,10 +538,123 @@ v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度�
         onSnapshot(qTasks, (snap) => {
             renderTasksElement(snap);
         });
+        onSnapshot(collection(db, "quickpicks"), (snap) => {
+            rawQuickpicks = [];
+            snap.forEach(d => rawQuickpicks.push({ docId: d.id, ...d.data() }));
+            renderAllChips();
+            renderQuickpickSettings();
+        });
     }
 
     function escapeHtml(str) {
         return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    // 新增快捷選項；若同分類下已存在相同值則略過。回傳是否為新增成功。
+    async function ensureQuickpick(category, value) {
+        value = (value || '').trim();
+        if (!value) return false;
+        const exists = rawQuickpicks.some(q => q.category === category && q.value === value);
+        if (exists) return false;
+        const maxOrder = rawQuickpicks
+            .filter(q => q.category === category)
+            .reduce((max, q) => Math.max(max, q.order ?? 0), -1);
+        await addDoc(collection(db, "quickpicks"), { category, value, order: maxOrder + 1, timestamp: new Date() });
+        return true;
+    }
+
+    function quickpicksByCategory(category) {
+        return rawQuickpicks.filter(q => q.category === category).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    }
+
+    // 在各表單輸入框下方渲染可點選的快捷選取按鈕
+    function renderAllChips() {
+        QP_FIELD_BINDINGS.forEach(({ inputId, chipsId, category }) => {
+            const container = document.getElementById(chipsId);
+            if (!container) return;
+            const items = quickpicksByCategory(category);
+            container.innerHTML = items.map(q =>
+                `<button type="button" class="qp-chip" data-value="${escapeHtml(q.value)}">${escapeHtml(q.value)}</button>`
+            ).join('');
+            container.querySelectorAll('.qp-chip').forEach(btn => {
+                btn.onclick = () => { document.getElementById(inputId).value = btn.dataset.value; };
+            });
+        });
+    }
+
+    // 設定頁：渲染三種分類的快捷選項清單（可新增/編輯/刪除/排序）
+    function renderQuickpickSettings() {
+        Object.entries(QP_CATEGORIES).forEach(([category, cfg]) => {
+            const listEl = document.getElementById(cfg.listId);
+            if (!listEl) return;
+            const items = quickpicksByCategory(category);
+
+            if (items.length === 0) {
+                listEl.innerHTML = `<div class="text-xs text-[var(--brown-300)] py-2">尚無快捷選項，新增後會出現在這裡。</div>`;
+                return;
+            }
+
+            listEl.innerHTML = items.map((q, idx) => `
+                <div class="qp-row flex items-center gap-1 px-3">
+                    <span class="flex-1 text-sm font-bold text-[var(--brown-800)] truncate">${escapeHtml(q.value)}</span>
+                    <button class="qp-icon-btn qp-move-up text-[var(--brown-500)] disabled:opacity-30" data-id="${q.docId}" data-category="${category}" ${idx === 0 ? 'disabled' : ''}>⬆️</button>
+                    <button class="qp-icon-btn qp-move-down text-[var(--brown-500)] disabled:opacity-30" data-id="${q.docId}" data-category="${category}" ${idx === items.length - 1 ? 'disabled' : ''}>⬇️</button>
+                    <button class="qp-icon-btn qp-edit text-amber-700" data-id="${q.docId}" data-value="${escapeHtml(q.value)}">✏️</button>
+                    <button class="qp-icon-btn qp-delete text-rose-600" data-id="${q.docId}">❌</button>
+                </div>
+            `).join('');
+        });
+
+        bindQuickpickSettingsEvents();
+    }
+
+    function bindQuickpickSettingsEvents() {
+        document.querySelectorAll('.qp-move-up').forEach(b => {
+            b.onclick = () => moveQuickpick(b.dataset.category, b.dataset.id, -1);
+        });
+        document.querySelectorAll('.qp-move-down').forEach(b => {
+            b.onclick = () => moveQuickpick(b.dataset.category, b.dataset.id, 1);
+        });
+        document.querySelectorAll('.qp-edit').forEach(b => {
+            b.onclick = async () => {
+                const newValue = prompt("修改快捷選項內容：", b.dataset.value);
+                if (newValue && newValue.trim()) {
+                    await updateDoc(doc(db, "quickpicks", b.dataset.id), { value: newValue.trim() });
+                }
+            };
+        });
+        document.querySelectorAll('.qp-delete').forEach(b => {
+            b.onclick = async () => {
+                if (confirm("確定刪除這個快捷選項？")) {
+                    await deleteDoc(doc(db, "quickpicks", b.dataset.id));
+                }
+            };
+        });
+    }
+
+    // 交換排序中相鄰兩筆的 order 值
+    async function moveQuickpick(category, docId, direction) {
+        const items = quickpicksByCategory(category);
+        const idx = items.findIndex(q => q.docId === docId);
+        const swapIdx = idx + direction;
+        if (idx === -1 || swapIdx < 0 || swapIdx >= items.length) return;
+
+        const current = items[idx];
+        const neighbor = items[swapIdx];
+        await updateDoc(doc(db, "quickpicks", current.docId), { order: neighbor.order ?? 0 });
+        await updateDoc(doc(db, "quickpicks", neighbor.docId), { order: current.order ?? 0 });
+    }
+
+    // 設定頁：渲染版本紀錄
+    function renderChangeLog() {
+        const el = document.getElementById('changeLogList');
+        if (!el) return;
+        el.innerHTML = CHANGELOG.map((entry, idx) => `
+            <div class="flex gap-3 ${idx === 0 ? '' : 'opacity-70'}">
+                <span class="shrink-0 font-black font-serif-tc ${idx === 0 ? 'text-[var(--clay)]' : 'text-[var(--brown-400)]'}">${entry.version}</span>
+                <p class="text-[var(--brown-700)] leading-relaxed">${escapeHtml(entry.notes)}</p>
+            </div>
+        `).join('');
     }
 
     function calculateAndRenderInventory() {
