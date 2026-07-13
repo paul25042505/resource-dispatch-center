@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.11",
+        notes: "修正「⋮」選單在清單捲動範圍內被裁切、看不到編輯/刪除按鈕的問題：改為底部彈出的操作列（跟編輯/版本紀錄彈窗同一種呈現方式），不會再被清單的捲動容器裁掉。"
+    },
+    {
         version: "v0.0.10",
         notes: "入庫來源紀錄每一筆新增「⋮」選單，可以編輯或刪除該筆紀錄。編輯會開啟彈窗表單，可修改物品、來源類型、來源/存放位置、數量、借入方式（含其他說明）與備註；刪除前會先跳出確認視窗。"
     },
@@ -753,27 +757,21 @@ function renderSourceLog() {
         const serial = formatSerial(s.serial);
         const sourceLabel = s.sourceType === 'own' ? '存放位置' : '來源';
         return `
-            <div class="relative">
-                <details>
-                    <summary class="px-4 py-3 min-h-[44px] flex items-center justify-between gap-2 cursor-pointer select-none">
-                        <span class="font-bold text-[var(--brown-900)] text-sm truncate">${serial ? `<span class="text-[var(--brown-400)] font-normal">${serial}</span> ` : ''}${escapeHtml(s.item)}</span>
-                        <span class="flex items-center gap-1.5 shrink-0">
-                            <span class="text-xs text-[var(--brown-500)] font-bold">x${s.qty} ▾</span>
-                            <button type="button" class="src-menu-btn qp-icon-btn text-[var(--brown-500)]" data-id="${s.docId}">⋮</button>
-                        </span>
-                    </summary>
-                    <div class="px-4 pb-3 text-xs text-[var(--brown-500)] space-y-1">
-                        <div>${sourceTypeIcon(s.sourceType)} ${sourceLabel}：${escapeHtml(s.source)}</div>
-                        <div>📜 借入方式：${escapeHtml(s.method)}</div>
-                        <div>📝 備註：${s.note ? escapeHtml(s.note) : '-'}</div>
-                        <div>🕒 登錄時間：${formatTimestamp(s.timestamp)}</div>
-                    </div>
-                </details>
-                <div class="src-menu hidden absolute right-4 top-11 z-20 card p-1.5 flex flex-col gap-1 min-w-[110px]" data-menu-for="${s.docId}">
-                    <button type="button" class="src-edit qp-row w-full text-left px-3 text-xs font-bold text-amber-700">✏️ 編輯</button>
-                    <button type="button" class="src-delete qp-row w-full text-left px-3 text-xs font-bold text-rose-600">❌ 刪除</button>
+            <details>
+                <summary class="px-4 py-3 min-h-[44px] flex items-center justify-between gap-2 cursor-pointer select-none">
+                    <span class="font-bold text-[var(--brown-900)] text-sm truncate">${serial ? `<span class="text-[var(--brown-400)] font-normal">${serial}</span> ` : ''}${escapeHtml(s.item)}</span>
+                    <span class="flex items-center gap-1.5 shrink-0">
+                        <span class="text-xs text-[var(--brown-500)] font-bold">x${s.qty} ▾</span>
+                        <button type="button" class="src-menu-btn qp-icon-btn text-[var(--brown-500)]" data-id="${s.docId}">⋮</button>
+                    </span>
+                </summary>
+                <div class="px-4 pb-3 text-xs text-[var(--brown-500)] space-y-1">
+                    <div>${sourceTypeIcon(s.sourceType)} ${sourceLabel}：${escapeHtml(s.source)}</div>
+                    <div>📜 借入方式：${escapeHtml(s.method)}</div>
+                    <div>📝 備註：${s.note ? escapeHtml(s.note) : '-'}</div>
+                    <div>🕒 登錄時間：${formatTimestamp(s.timestamp)}</div>
                 </div>
-            </div>
+            </details>
         `;
     }).join('');
 
@@ -781,36 +779,22 @@ function renderSourceLog() {
         btn.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            const menu = document.querySelector(`.src-menu[data-menu-for="${btn.dataset.id}"]`);
-            const isHidden = menu.classList.contains('hidden');
-            document.querySelectorAll('.src-menu').forEach(m => m.classList.add('hidden'));
-            if (isHidden) menu.classList.remove('hidden');
+            openSourceActionSheet(btn.dataset.id);
         };
     });
-    document.querySelectorAll('.src-edit').forEach(btn => {
-        btn.onclick = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const docId = btn.closest('.src-menu').dataset.menuFor;
-            document.querySelectorAll('.src-menu').forEach(m => m.classList.add('hidden'));
-            openEditSourceModal(docId);
-        };
-    });
-    document.querySelectorAll('.src-delete').forEach(btn => {
-        btn.onclick = async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const docId = btn.closest('.src-menu').dataset.menuFor;
-            document.querySelectorAll('.src-menu').forEach(m => m.classList.add('hidden'));
-            const rec = rawSources.find(s => s.docId === docId);
-            if (!confirm(`確定刪除這筆入庫紀錄？${rec ? `（${rec.item} x${rec.qty}）` : ''}此動作無法復原。`)) return;
-            try {
-                await deleteDoc(doc(db, 'projects', currentProjectId, 'sources', docId));
-            } catch (err) {
-                alert(firestoreErrorMessage('刪除入庫紀錄', err));
-            }
-        };
-    });
+}
+
+// 選單目前對應的入庫紀錄 docId（底部操作列共用，不會因清單捲動範圍而被裁切）
+let sourceActionSheetTargetId = null;
+
+function openSourceActionSheet(docId) {
+    sourceActionSheetTargetId = docId;
+    document.getElementById('sourceActionSheet').classList.remove('hidden');
+}
+
+function closeSourceActionSheet() {
+    sourceActionSheetTargetId = null;
+    document.getElementById('sourceActionSheet').classList.add('hidden');
 }
 
 let editingSourceId = null;
@@ -977,9 +961,27 @@ function bindGlobalEvents() {
     });
     document.getElementById('btnSaveEditSource').onclick = saveEditedSource;
 
-    document.addEventListener('click', () => {
-        document.querySelectorAll('.src-menu').forEach(m => m.classList.add('hidden'));
+    document.getElementById('btnSourceMenuCancel').onclick = closeSourceActionSheet;
+    document.getElementById('sourceActionSheet').addEventListener('click', (e) => {
+        if (e.target.id === 'sourceActionSheet') closeSourceActionSheet();
     });
+    document.getElementById('btnSourceMenuEdit').onclick = () => {
+        const docId = sourceActionSheetTargetId;
+        closeSourceActionSheet();
+        if (docId) openEditSourceModal(docId);
+    };
+    document.getElementById('btnSourceMenuDelete').onclick = async () => {
+        const docId = sourceActionSheetTargetId;
+        closeSourceActionSheet();
+        if (!docId) return;
+        const rec = rawSources.find(s => s.docId === docId);
+        if (!confirm(`確定刪除這筆入庫紀錄？${rec ? `（${rec.item} x${rec.qty}）` : ''}此動作無法復原。`)) return;
+        try {
+            await deleteDoc(doc(db, 'projects', currentProjectId, 'sources', docId));
+        } catch (err) {
+            alert(firestoreErrorMessage('刪除入庫紀錄', err));
+        }
+    };
 
     document.getElementById('btnAddGroup').onclick = addGroup;
     document.getElementById('newGroupName').addEventListener('keydown', (e) => {
