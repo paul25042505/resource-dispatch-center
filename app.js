@@ -35,6 +35,10 @@ try {
 // 版本紀錄（與 index.html 開頭 Change Log 註解同步維護）
 const CHANGELOG = [
     {
+        version: "v0.0.7",
+        notes: "物品／來源單位／經辦人員的快捷選取，由按鈕列改為下拉選單，物品類的選單會在每個選項後面附註「（庫房剩餘：X 件）」，選取前就能比較各物品的庫存量。入庫登錄的來源欄位改為依「來源類型」動態顯示：外部借入顯示「外部單位名稱」，自有物資則顯示「存放位置」，物資總表的來源明細也會標示對應的存放位置／來源文字，方便日後尋找自有物資的實際擺放處。"
+    },
+    {
         version: "v0.0.6",
         notes: "入庫登錄的借入方式新增「其他」選項，選取後會多跳出一個文字框讓你填寫自訂說明。領用簽收表單在輸入/選取物品名稱後，會即時顯示「目前庫房剩餘」數量；歸還登記表單在輸入物品名稱與選擇小組後，會即時顯示該小組目前領用中尚未歸還的數量，填寫前就知道可以填多少。若送出的數量超過可用量，會先跳出確認視窗而不是直接擋下，避免因為系統資料誤差而卡住現場作業。"
     },
@@ -74,14 +78,14 @@ const QP_CATEGORIES = {
     source: { listId: "qpList-source" },
     person: { listId: "qpList-person" }
 };
-// 表單欄位對應的快捷選取分類與 chips 容器
+// 表單欄位對應的快捷選取分類與下拉選單；showStock 的欄位會在選項後附註目前庫房剩餘
 const QP_FIELD_BINDINGS = [
-    { inputId: "srcItem", chipsId: "qpChips-srcItem", category: "item" },
-    { inputId: "srcUnit", chipsId: "qpChips-srcUnit", category: "source" },
-    { inputId: "allocItem", chipsId: "qpChips-allocItem", category: "item" },
-    { inputId: "allocUser", chipsId: "qpChips-allocUser", category: "person" },
-    { inputId: "retItem", chipsId: "qpChips-retItem", category: "item" },
-    { inputId: "retReceiver", chipsId: "qpChips-retReceiver", category: "person" }
+    { inputId: "srcItem", selectId: "qpSelect-srcItem", category: "item", showStock: true },
+    { inputId: "srcUnit", selectId: "qpSelect-srcUnit", category: "source", showStock: false },
+    { inputId: "allocItem", selectId: "qpSelect-allocItem", category: "item", showStock: true },
+    { inputId: "allocUser", selectId: "qpSelect-allocUser", category: "person", showStock: false },
+    { inputId: "retItem", selectId: "qpSelect-retItem", category: "item", showStock: true },
+    { inputId: "retReceiver", selectId: "qpSelect-retReceiver", category: "person", showStock: false }
 ];
 
 // ---- 全域狀態 ----
@@ -272,6 +276,7 @@ function enterProject(projectId, projectName) {
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'sources'), (snap) => {
         rawSources = []; snap.forEach(d => rawSources.push(d.data()));
         calculateAndRenderInventory();
+        renderSourceLog();
     }, (err) => firestoreErrorMessage('讀取物資來源', err)));
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'allocations'), (snap) => {
         rawAllocations = []; snap.forEach(d => rawAllocations.push(d.data()));
@@ -417,20 +422,22 @@ function quickpicksByCategory(category) {
 }
 
 function renderAllChips() {
-    QP_FIELD_BINDINGS.forEach(({ inputId, chipsId, category }) => {
-        const container = document.getElementById(chipsId);
-        if (!container) return;
+    QP_FIELD_BINDINGS.forEach(({ inputId, selectId, category, showStock }) => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
         const items = quickpicksByCategory(category);
-        container.innerHTML = items.map(q =>
-            `<button type="button" class="qp-chip" data-value="${escapeHtml(q.value)}">${escapeHtml(q.value)}</button>`
-        ).join('');
-        container.querySelectorAll('.qp-chip').forEach(btn => {
-            btn.onclick = () => {
-                const input = document.getElementById(inputId);
-                input.value = btn.dataset.value;
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-            };
-        });
+        const options = items.map(q => {
+            const label = showStock ? `${q.value}（庫房剩餘：${getItemRemaining(q.value)} 件）` : q.value;
+            return `<option value="${escapeHtml(q.value)}">${escapeHtml(label)}</option>`;
+        }).join('');
+        select.innerHTML = `<option value="">📋 或從清單快速選取...</option>${options}`;
+        select.onchange = () => {
+            if (!select.value) return;
+            const input = document.getElementById(inputId);
+            input.value = select.value;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            select.value = '';
+        };
     });
 }
 
@@ -575,6 +582,7 @@ function calculateAndRenderInventory() {
         cardsWrap.innerHTML = `<div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">目前尚無庫存異動紀錄。<br>請前往【進出作業】分頁登錄。</div>`;
         updateAllocStockHint();
         updateRetOutstandingHint();
+        renderAllChips();
         return;
     }
 
@@ -586,7 +594,8 @@ function calculateAndRenderInventory() {
         const totalA = itemSrcs.reduce((sum, s) => sum + s.qty, 0);
         const detailsA = itemSrcs.map(s => {
             const serial = formatSerial(s.serial);
-            return `<span class="block text-xs text-[var(--brown-400)]">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${sourceTypeIcon(s.sourceType)} ${escapeHtml(s.source)} : <b>${s.qty}</b> (${escapeHtml(s.method)})</span>`;
+            const sourceLabel = s.sourceType === 'own' ? '存放位置' : '來源';
+            return `<span class="block text-xs text-[var(--brown-400)]">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${sourceTypeIcon(s.sourceType)} ${sourceLabel}：${escapeHtml(s.source)} : <b>${s.qty}</b> (${escapeHtml(s.method)})</span>`;
         }).join('');
 
         const itemAllocs = rawAllocations.filter(a => a.item === itemName);
@@ -632,13 +641,10 @@ function calculateAndRenderInventory() {
                     </div>
                 </div>
                 ${流浪中 > 0 ? `<div class="text-xs font-bold text-rose-600">⚠️ 流浪中：尚有 ${流浪中} 件未歸還</div>` : ''}
-                <details class="text-xs text-[var(--brown-500)]">
-                    <summary class="cursor-pointer font-bold select-none py-1.5 min-h-[44px] flex items-center">📎 查看來源與分配明細</summary>
-                    <div class="mt-1 space-y-2 pl-2 border-l-2 border-[var(--tan-300)]">
-                        <div><b class="text-[var(--brown-700)]">來源：</b>${detailsA || '-'}</div>
-                        <div><b class="text-[var(--brown-700)]">分配：</b>${detailsB || '-'}</div>
-                    </div>
-                </details>
+                <div class="text-xs text-[var(--brown-500)] space-y-2 pt-1.5 border-t border-dashed border-[var(--tan-300)]">
+                    <div><b class="text-[var(--brown-700)]">來源：</b>${detailsA || '-'}</div>
+                    <div><b class="text-[var(--brown-700)]">分配：</b>${detailsB || '-'}</div>
+                </div>
             </div>
         `;
     });
@@ -648,6 +654,46 @@ function calculateAndRenderInventory() {
 
     updateAllocStockHint();
     updateRetOutstandingHint();
+    renderAllChips();
+}
+
+// 全新的入庫來源交易紀錄：以個別入庫事件（而非依物品彙總）列出，預設只顯示物品名稱與
+// 數量，點擊展開才看到單號、來源類型、方式、備註與時間等完整資訊。
+function formatTimestamp(ts) {
+    const d = ts && typeof ts.toDate === 'function' ? ts.toDate() : (ts instanceof Date ? ts : null);
+    if (!d) return '-';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function renderSourceLog() {
+    const el = document.getElementById('sourceLog');
+    if (!el) return;
+
+    if (rawSources.length === 0) {
+        el.innerHTML = `<div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">目前尚無入庫紀錄。</div>`;
+        return;
+    }
+
+    const sorted = [...rawSources].sort((a, b) => (b.serial ?? 0) - (a.serial ?? 0));
+    el.innerHTML = sorted.map(s => {
+        const serial = formatSerial(s.serial);
+        const sourceLabel = s.sourceType === 'own' ? '存放位置' : '來源';
+        return `
+            <details>
+                <summary class="px-4 py-3 min-h-[44px] flex items-center justify-between gap-2 cursor-pointer select-none">
+                    <span class="font-bold text-[var(--brown-900)] text-sm truncate">${serial ? `<span class="text-[var(--brown-400)] font-normal">${serial}</span> ` : ''}${escapeHtml(s.item)}</span>
+                    <span class="text-xs text-[var(--brown-500)] font-bold shrink-0">x${s.qty} ▾</span>
+                </summary>
+                <div class="px-4 pb-3 text-xs text-[var(--brown-500)] space-y-1">
+                    <div>${sourceTypeIcon(s.sourceType)} ${sourceLabel}：${escapeHtml(s.source)}</div>
+                    <div>📜 借入方式：${escapeHtml(s.method)}</div>
+                    <div>📝 備註：${s.note ? escapeHtml(s.note) : '-'}</div>
+                    <div>🕒 登錄時間：${formatTimestamp(s.timestamp)}</div>
+                </div>
+            </details>
+        `;
+    }).join('');
 }
 
 // ============ 版本紀錄（卡片式，收合預設，點擊才展開） ============
@@ -741,6 +787,16 @@ function bindGlobalEvents() {
 
     document.getElementById('btnBackToDashboard').onclick = exitProject;
 
+    document.getElementById('btnShowChangelog').onclick = () => {
+        document.getElementById('changelogModal').classList.remove('hidden');
+    };
+    document.getElementById('btnCloseChangelog').onclick = () => {
+        document.getElementById('changelogModal').classList.add('hidden');
+    };
+    document.getElementById('changelogModal').addEventListener('click', (e) => {
+        if (e.target.id === 'changelogModal') e.currentTarget.classList.add('hidden');
+    });
+
     document.getElementById('btnAddGroup').onclick = addGroup;
     document.getElementById('newGroupName').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); addGroup(); }
@@ -748,6 +804,11 @@ function bindGlobalEvents() {
 
     document.getElementById('srcMethod').addEventListener('change', (e) => {
         document.getElementById('srcMethodOther').classList.toggle('hidden', e.target.value !== '其他');
+    });
+
+    document.getElementById('srcType').addEventListener('change', (e) => {
+        const input = document.getElementById('srcUnit');
+        input.placeholder = e.target.value === 'own' ? '存放位置(如:衛生器材室、A棟2樓)' : '外部單位名稱(如:302旅)';
     });
 
     document.getElementById('allocItem').addEventListener('input', updateAllocStockHint);
