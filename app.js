@@ -40,6 +40,10 @@ try {
 // v0.0.1～v0.0.20 為採用此規則前的歷史紀錄，版號僅代表累計改版次數，不做語意區分。
 const CHANGELOG = [
     {
+        version: "v2.0.0",
+        notes: "整套介面大改版。底部導覽列從 4 個精簡成 3 個（總覽／進出作業／設定），原本的「物資總表」「借用報表」「目前位置」三個分散畫面合併成一個「總覽」：可搜尋物品、用「保管中／全部歷史」分段控制切換「東西現在在哪」跟「這次任務總共借了什麼」兩種視角，依小組篩選、依物品分組列表，點一列展開看逐筆經手人與日期；原本的入庫/領用/歸還逐筆紀錄收進「原始紀錄」收合區塊。設定頁的小組、使用場地、快捷選項、連結清單，全面改成點「⋮」才彈出編輯/刪除/排序選單，不再常駐一排按鈕。視覺風格改為 iOS 26 液態玻璃：卡片與按鈕改用半透明毛玻璃材質、圓潤轉角，按鈕按下會有彈簧回彈效果，取代 v0.0.20 的方角硬邊風格。"
+    },
+    {
         version: "v1.1.0",
         notes: "設定頁新增「🔗 網網相連」：可存放常用外部連結（如場地平面圖、報備系統），點一下直接開啟，可新增/編輯/刪除/排序。原本的「子位置」全面更名為更直觀的「使用場地」（功能不變，仍隸屬單一小組，領用/歸還時可指定）。物資總表每個物品新增「目前位置」欄位/區塊，一次列出這個物品目前分散在庫房待發、哪些小組、哪些使用場地，不用再切換到「依小組篩選」才看得到。"
     },
@@ -461,7 +465,7 @@ function renderGroupSelects() {
     const filterEl = document.getElementById('invFilterGroup');
     if (filterEl) {
         const prevValue = filterEl.value;
-        filterEl.innerHTML = `<option value="">👥 依小組查看目前持有物資...</option>` +
+        filterEl.innerHTML = `<option value="">👥 依小組篩選...</option>` +
             rawGroups.map(g => `<option value="${g.docId}">${escapeHtml(g.name)}</option>`).join('');
         if (rawGroups.some(g => g.docId === prevValue)) filterEl.value = prevValue;
     }
@@ -499,35 +503,27 @@ function renderGroupSettings() {
         return;
     }
     // 每次資料異動都會整個重新產生 HTML，所以要先記住哪些小組的卡片目前是展開的，
-    // 重繪後再還原，不然新增/刪除子位置時卡片會突然自己收合。
+    // 重繪後再還原，不然新增/刪除使用場地時卡片會突然自己收合。
     const openGroupIds = new Set(Array.from(el.querySelectorAll('details[open]')).map(d => d.dataset.group));
-    el.innerHTML = rawGroups.map((g, idx) => {
+    el.innerHTML = rawGroups.map((g) => {
         const subLocs = getSubLocationsByGroup(g.docId);
         const subLocRows = subLocs.length === 0
             ? `<div class="text-xs text-[var(--brown-300)] py-1">尚無使用場地，新增後可在領用/歸還時指定。</div>`
-            : subLocs.map((s, sIdx) => `
+            : subLocs.map((s) => `
                 <div class="qp-row flex items-center gap-1 px-3">
                     <span class="flex-1 text-sm font-bold text-[var(--brown-700)] truncate">📍 ${escapeHtml(s.name)}</span>
-                    <button class="qp-icon-btn subloc-move-up text-[var(--brown-500)] disabled:opacity-30" data-id="${s.docId}" data-group="${g.docId}" ${sIdx === 0 ? 'disabled' : ''}>⬆️</button>
-                    <button class="qp-icon-btn subloc-move-down text-[var(--brown-500)] disabled:opacity-30" data-id="${s.docId}" data-group="${g.docId}" ${sIdx === subLocs.length - 1 ? 'disabled' : ''}>⬇️</button>
-                    <button class="qp-icon-btn subloc-edit text-amber-700" data-id="${s.docId}" data-name="${escapeHtml(s.name)}">✏️</button>
-                    <button class="qp-icon-btn subloc-delete text-rose-600" data-id="${s.docId}">❌</button>
+                    <button class="qp-icon-btn subloc-menu-btn text-[var(--brown-500)]" data-group="${g.docId}" data-id="${s.docId}" data-name="${escapeHtml(s.name)}">⋮</button>
                 </div>
             `).join('');
         return `
         <details class="card overflow-hidden" data-group="${g.docId}" ${openGroupIds.has(g.docId) ? 'open' : ''}>
             <summary class="card-header flex items-center justify-between min-h-[44px] cursor-pointer select-none gap-2">
                 <span class="font-bold text-sm text-[var(--brown-800)] truncate flex-1">👥 ${escapeHtml(g.name)}</span>
-                <span class="text-xs text-[var(--brown-400)] font-normal shrink-0">${subLocs.length > 0 ? `${subLocs.length} 個使用場地 ▾` : '▾'}</span>
+                <span class="text-xs text-[var(--brown-400)] font-normal shrink-0">${subLocs.length > 0 ? `${subLocs.length} 個使用場地` : ''}</span>
+                <button class="qp-icon-btn grp-menu-btn text-[var(--brown-500)]" data-id="${g.docId}" data-name="${escapeHtml(g.name)}">⋮</button>
             </summary>
             <div class="p-3 space-y-3">
-                <div class="flex items-center justify-end gap-1">
-                    <button class="qp-icon-btn grp-move-up text-[var(--brown-500)] disabled:opacity-30" data-id="${g.docId}" ${idx === 0 ? 'disabled' : ''}>⬆️</button>
-                    <button class="qp-icon-btn grp-move-down text-[var(--brown-500)] disabled:opacity-30" data-id="${g.docId}" ${idx === rawGroups.length - 1 ? 'disabled' : ''}>⬇️</button>
-                    <button class="qp-icon-btn grp-edit text-amber-700" data-id="${g.docId}" data-name="${escapeHtml(g.name)}">✏️ 改名</button>
-                    <button class="qp-icon-btn grp-delete text-rose-600" data-id="${g.docId}">❌ 刪除小組</button>
-                </div>
-                <div class="border-t border-dashed border-[var(--tan-300)] pt-2.5 space-y-2">
+                <div class="space-y-2">
                     <p class="text-xs font-bold text-[var(--brown-600)]">🚐 使用場地（辦公室、車輛等，可知道每個場地放了什麼）</p>
                     <div class="flex gap-2">
                         <input type="text" class="field flex-1 subloc-new-input" data-group="${g.docId}" placeholder="新增使用場地（如：營督辦公室、1號車）">
@@ -540,27 +536,32 @@ function renderGroupSettings() {
     `;
     }).join('');
 
-    document.querySelectorAll('.grp-move-up').forEach(b => { b.onclick = () => moveGroup(b.dataset.id, -1); });
-    document.querySelectorAll('.grp-move-down').forEach(b => { b.onclick = () => moveGroup(b.dataset.id, 1); });
-    document.querySelectorAll('.grp-edit').forEach(b => {
-        b.onclick = async (e) => {
+    document.querySelectorAll('.grp-menu-btn').forEach(b => {
+        b.onclick = (e) => {
             e.preventDefault();
-            const newName = prompt('修改小組名稱：', b.dataset.name);
-            if (newName && newName.trim()) {
-                await updateDoc(doc(db, 'projects', currentProjectId, 'groups', b.dataset.id), { name: newName.trim() });
-            }
-        };
-    });
-    document.querySelectorAll('.grp-delete').forEach(b => {
-        b.onclick = async (e) => {
-            e.preventDefault();
-            if (confirm('確定刪除這個小組？已登錄的領用/歸還紀錄不會被刪除，但將顯示為「未知小組」；小組底下的使用場地也會一併刪除。')) {
-                const subLocs = getSubLocationsByGroup(b.dataset.id);
-                for (const s of subLocs) {
-                    await deleteDoc(doc(db, 'projects', currentProjectId, 'sublocations', s.docId));
+            e.stopPropagation();
+            const idx = rawGroups.findIndex(g => g.docId === b.dataset.id);
+            openListItemActionSheet({
+                canMoveUp: idx > 0,
+                canMoveDown: idx >= 0 && idx < rawGroups.length - 1,
+                onMoveUp: () => moveGroup(b.dataset.id, -1),
+                onMoveDown: () => moveGroup(b.dataset.id, 1),
+                onEdit: async () => {
+                    const newName = prompt('修改小組名稱：', b.dataset.name);
+                    if (newName && newName.trim()) {
+                        await updateDoc(doc(db, 'projects', currentProjectId, 'groups', b.dataset.id), { name: newName.trim() });
+                    }
+                },
+                onDelete: async () => {
+                    if (confirm('確定刪除這個小組？已登錄的領用/歸還紀錄不會被刪除，但將顯示為「未知小組」；小組底下的使用場地也會一併刪除。')) {
+                        const subLocs = getSubLocationsByGroup(b.dataset.id);
+                        for (const s of subLocs) {
+                            await deleteDoc(doc(db, 'projects', currentProjectId, 'sublocations', s.docId));
+                        }
+                        await deleteDoc(doc(db, 'projects', currentProjectId, 'groups', b.dataset.id));
+                    }
                 }
-                await deleteDoc(doc(db, 'projects', currentProjectId, 'groups', b.dataset.id));
-            }
+            });
         };
     });
 
@@ -578,21 +579,27 @@ function renderGroupSettings() {
             }
         };
     });
-    document.querySelectorAll('.subloc-move-up').forEach(b => { b.onclick = () => moveSubLocation(b.dataset.group, b.dataset.id, -1); });
-    document.querySelectorAll('.subloc-move-down').forEach(b => { b.onclick = () => moveSubLocation(b.dataset.group, b.dataset.id, 1); });
-    document.querySelectorAll('.subloc-edit').forEach(b => {
-        b.onclick = async () => {
-            const newName = prompt('修改使用場地名稱：', b.dataset.name);
-            if (newName && newName.trim()) {
-                await updateDoc(doc(db, 'projects', currentProjectId, 'sublocations', b.dataset.id), { name: newName.trim() });
-            }
-        };
-    });
-    document.querySelectorAll('.subloc-delete').forEach(b => {
-        b.onclick = async () => {
-            if (confirm('確定刪除這個使用場地？已登錄的領用/歸還紀錄不會被刪除，但將顯示為「未指定使用場地」。')) {
-                await deleteDoc(doc(db, 'projects', currentProjectId, 'sublocations', b.dataset.id));
-            }
+    document.querySelectorAll('.subloc-menu-btn').forEach(b => {
+        b.onclick = () => {
+            const list = getSubLocationsByGroup(b.dataset.group);
+            const idx = list.findIndex(s => s.docId === b.dataset.id);
+            openListItemActionSheet({
+                canMoveUp: idx > 0,
+                canMoveDown: idx >= 0 && idx < list.length - 1,
+                onMoveUp: () => moveSubLocation(b.dataset.group, b.dataset.id, -1),
+                onMoveDown: () => moveSubLocation(b.dataset.group, b.dataset.id, 1),
+                onEdit: async () => {
+                    const newName = prompt('修改使用場地名稱：', b.dataset.name);
+                    if (newName && newName.trim()) {
+                        await updateDoc(doc(db, 'projects', currentProjectId, 'sublocations', b.dataset.id), { name: newName.trim() });
+                    }
+                },
+                onDelete: async () => {
+                    if (confirm('確定刪除這個使用場地？已登錄的領用/歸還紀錄不會被刪除，但將顯示為「未指定使用場地」。')) {
+                        await deleteDoc(doc(db, 'projects', currentProjectId, 'sublocations', b.dataset.id));
+                    }
+                }
+            });
         };
     });
 }
@@ -622,33 +629,35 @@ function renderLinksSettings() {
         el.innerHTML = `<div class="text-xs text-[var(--brown-300)] py-2">尚無連結，新增後會出現在這裡。</div>`;
         return;
     }
-    el.innerHTML = rawLinks.map((l, idx) => `
+    el.innerHTML = rawLinks.map((l) => `
         <div class="qp-row flex items-center gap-1 px-3">
             <a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" class="flex-1 text-sm font-bold text-blue-700 truncate">🔗 ${escapeHtml(l.name)}</a>
-            <button class="qp-icon-btn link-move-up text-[var(--brown-500)] disabled:opacity-30" data-id="${l.docId}" ${idx === 0 ? 'disabled' : ''}>⬆️</button>
-            <button class="qp-icon-btn link-move-down text-[var(--brown-500)] disabled:opacity-30" data-id="${l.docId}" ${idx === rawLinks.length - 1 ? 'disabled' : ''}>⬇️</button>
-            <button class="qp-icon-btn link-edit text-amber-700" data-id="${l.docId}" data-name="${escapeHtml(l.name)}" data-url="${escapeHtml(l.url)}">✏️</button>
-            <button class="qp-icon-btn link-delete text-rose-600" data-id="${l.docId}">❌</button>
+            <button class="qp-icon-btn link-menu-btn text-[var(--brown-500)]" data-id="${l.docId}" data-name="${escapeHtml(l.name)}" data-url="${escapeHtml(l.url)}">⋮</button>
         </div>
     `).join('');
 
-    document.querySelectorAll('.link-move-up').forEach(b => { b.onclick = () => moveLink(b.dataset.id, -1); });
-    document.querySelectorAll('.link-move-down').forEach(b => { b.onclick = () => moveLink(b.dataset.id, 1); });
-    document.querySelectorAll('.link-edit').forEach(b => {
-        b.onclick = async () => {
-            const newName = prompt('修改連結名稱：', b.dataset.name);
-            if (newName === null) return;
-            const newUrl = prompt('修改網址：', b.dataset.url);
-            if (newUrl === null) return;
-            if (!newName.trim() || !isValidHttpUrl(newUrl.trim())) return alert('請輸入名稱，以及 http:// 或 https:// 開頭的網址');
-            await updateDoc(doc(db, 'projects', currentProjectId, 'links', b.dataset.id), { name: newName.trim(), url: newUrl.trim() });
-        };
-    });
-    document.querySelectorAll('.link-delete').forEach(b => {
-        b.onclick = async () => {
-            if (confirm('確定刪除這個連結？')) {
-                await deleteDoc(doc(db, 'projects', currentProjectId, 'links', b.dataset.id));
-            }
+    document.querySelectorAll('.link-menu-btn').forEach(b => {
+        b.onclick = () => {
+            const idx = rawLinks.findIndex(l => l.docId === b.dataset.id);
+            openListItemActionSheet({
+                canMoveUp: idx > 0,
+                canMoveDown: idx >= 0 && idx < rawLinks.length - 1,
+                onMoveUp: () => moveLink(b.dataset.id, -1),
+                onMoveDown: () => moveLink(b.dataset.id, 1),
+                onEdit: async () => {
+                    const newName = prompt('修改連結名稱：', b.dataset.name);
+                    if (newName === null) return;
+                    const newUrl = prompt('修改網址：', b.dataset.url);
+                    if (newUrl === null) return;
+                    if (!newName.trim() || !isValidHttpUrl(newUrl.trim())) return alert('請輸入名稱，以及 http:// 或 https:// 開頭的網址');
+                    await updateDoc(doc(db, 'projects', currentProjectId, 'links', b.dataset.id), { name: newName.trim(), url: newUrl.trim() });
+                },
+                onDelete: async () => {
+                    if (confirm('確定刪除這個連結？')) {
+                        await deleteDoc(doc(db, 'projects', currentProjectId, 'links', b.dataset.id));
+                    }
+                }
+            });
         };
     });
 }
@@ -777,13 +786,10 @@ function renderQuickpickSettings() {
             return;
         }
 
-        listEl.innerHTML = items.map((q, idx) => `
+        listEl.innerHTML = items.map((q) => `
             <div class="qp-row flex items-center gap-1 px-3">
                 <span class="flex-1 text-sm font-bold text-[var(--brown-800)] truncate">${escapeHtml(q.value)}</span>
-                <button class="qp-icon-btn qp-move-up text-[var(--brown-500)] disabled:opacity-30" data-id="${q.docId}" data-category="${category}" ${idx === 0 ? 'disabled' : ''}>⬆️</button>
-                <button class="qp-icon-btn qp-move-down text-[var(--brown-500)] disabled:opacity-30" data-id="${q.docId}" data-category="${category}" ${idx === items.length - 1 ? 'disabled' : ''}>⬇️</button>
-                <button class="qp-icon-btn qp-edit text-amber-700" data-id="${q.docId}" data-value="${escapeHtml(q.value)}">✏️</button>
-                <button class="qp-icon-btn qp-delete text-rose-600" data-id="${q.docId}">❌</button>
+                <button class="qp-icon-btn qp-menu-btn text-[var(--brown-500)]" data-category="${category}" data-id="${q.docId}" data-value="${escapeHtml(q.value)}">⋮</button>
             </div>
         `).join('');
     });
@@ -792,21 +798,28 @@ function renderQuickpickSettings() {
 }
 
 function bindQuickpickSettingsEvents() {
-    document.querySelectorAll('.qp-move-up').forEach(b => { b.onclick = () => moveQuickpick(b.dataset.category, b.dataset.id, -1); });
-    document.querySelectorAll('.qp-move-down').forEach(b => { b.onclick = () => moveQuickpick(b.dataset.category, b.dataset.id, 1); });
-    document.querySelectorAll('.qp-edit').forEach(b => {
-        b.onclick = async () => {
-            const newValue = prompt('修改快捷選項內容：', b.dataset.value);
-            if (newValue && newValue.trim()) {
-                await updateDoc(doc(db, 'projects', currentProjectId, 'quickpicks', b.dataset.id), { value: newValue.trim() });
-            }
-        };
-    });
-    document.querySelectorAll('.qp-delete').forEach(b => {
-        b.onclick = async () => {
-            if (confirm('確定刪除這個快捷選項？')) {
-                await deleteDoc(doc(db, 'projects', currentProjectId, 'quickpicks', b.dataset.id));
-            }
+    document.querySelectorAll('.qp-menu-btn').forEach(b => {
+        b.onclick = () => {
+            const category = b.dataset.category;
+            const items = quickpicksByCategory(category);
+            const idx = items.findIndex(q => q.docId === b.dataset.id);
+            openListItemActionSheet({
+                canMoveUp: idx > 0,
+                canMoveDown: idx >= 0 && idx < items.length - 1,
+                onMoveUp: () => moveQuickpick(category, b.dataset.id, -1),
+                onMoveDown: () => moveQuickpick(category, b.dataset.id, 1),
+                onEdit: async () => {
+                    const newValue = prompt('修改快捷選項內容：', b.dataset.value);
+                    if (newValue && newValue.trim()) {
+                        await updateDoc(doc(db, 'projects', currentProjectId, 'quickpicks', b.dataset.id), { value: newValue.trim() });
+                    }
+                },
+                onDelete: async () => {
+                    if (confirm('確定刪除這個快捷選項？')) {
+                        await deleteDoc(doc(db, 'projects', currentProjectId, 'quickpicks', b.dataset.id));
+                    }
+                }
+            });
         };
     });
 }
@@ -854,32 +867,9 @@ function getItemRemaining(itemName) {
     return totalA - totalB + totalC;
 }
 
-// 某物品目前分散在哪裡（庫房待發／各小組／各小組底下的使用場地），
-// 跟「依小組篩選」剛好相反：這裡是以物品為主角，一次看完它散落的所有地方。
-function getItemLocationBreakdown(itemName) {
-    const breakdown = [];
-    const remaining = getItemRemaining(itemName);
-    if (remaining > 0) breakdown.push({ label: '📦 庫房待發', qty: remaining });
-    rawGroups.forEach(g => {
-        const subLocs = getSubLocationsByGroup(g.docId);
-        if (subLocs.length === 0) {
-            const qty = getGroupOutstanding(itemName, g.docId);
-            if (qty > 0) breakdown.push({ label: `👥 ${g.name}`, qty });
-            return;
-        }
-        subLocs.forEach(s => {
-            const qty = getGroupOutstanding(itemName, g.docId, s.docId);
-            if (qty > 0) breakdown.push({ label: `👥 ${g.name} 📍${s.name}`, qty });
-        });
-        const unassignedQty = getGroupOutstanding(itemName, g.docId, UNASSIGNED_SUBLOCATION);
-        if (unassignedQty > 0) breakdown.push({ label: `👥 ${g.name}（未指定場地）`, qty: unassignedQty });
-    });
-    return breakdown;
-}
-
-// 該小組（可選：某個子位置）目前領用中、尚未歸還的某物品數量
-// subLocationFilter 不傳＝不篩選子位置；傳 UNASSIGNED_SUBLOCATION＝只算未指定子位置的部分
-function getGroupOutstanding(itemName, groupId, subLocationFilter) {
+// 某物品在某小組（可選：某個使用場地）名下的所有領用/歸還原始紀錄
+// subLocationFilter 不傳＝不篩選場地；傳 UNASSIGNED_SUBLOCATION＝只算未指定場地的部分
+function getCustodyRecords(itemName, groupId, subLocationFilter) {
     let allocs = rawAllocations.filter(a => a.item === itemName && String(a.groupId) === String(groupId));
     let rets = rawReturns.filter(r => r.item === itemName && String(r.groupId) === String(groupId));
     if (subLocationFilter !== undefined) {
@@ -889,60 +879,13 @@ function getGroupOutstanding(itemName, groupId, subLocationFilter) {
         allocs = allocs.filter(matchesSubLocation);
         rets = rets.filter(matchesSubLocation);
     }
-    const allocated = allocs.reduce((sum, a) => sum + a.qty, 0);
-    const returned = rets.reduce((sum, r) => sum + r.qty, 0);
-    return allocated - returned;
+    return { allocs, rets };
 }
 
-// 某小組（可選：某個子位置）目前持有中（已領未還）的所有物品清單
-function getGroupHoldings(groupId, subLocationFilter) {
-    const allItems = Array.from(new Set([...rawAllocations.map(a => a.item), ...rawReturns.map(r => r.item)]));
-    return allItems
-        .map(item => ({ item, qty: getGroupOutstanding(item, groupId, subLocationFilter) }))
-        .filter(x => x.qty > 0);
-}
-
-function renderGroupHoldings() {
-    const select = document.getElementById('invFilterGroup');
-    const wrap = document.getElementById('invGroupHoldings');
-    if (!select || !wrap) return;
-    const groupId = select.value;
-    if (!groupId) { wrap.classList.add('hidden'); wrap.innerHTML = ''; return; }
-
-    const g = findGroupByStoredId(groupId);
-    const groupLabel = g ? g.name : '此小組';
-    const subLocs = getSubLocationsByGroup(groupId);
-    wrap.classList.remove('hidden');
-
-    const renderChips = (holdings) => holdings.map(h => `<span class="text-xs font-bold bg-white border border-blue-200 text-blue-700 px-2.5 py-1.5 rounded-lg">${escapeHtml(h.item)} × <b class="stat-value">${h.qty}</b></span>`).join('');
-
-    // 小組沒有設定子位置：維持原本的單一清單顯示
-    if (subLocs.length === 0) {
-        const holdings = getGroupHoldings(groupId);
-        wrap.innerHTML = holdings.length === 0
-            ? `<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700">🧑‍🤝‍🧑 ${escapeHtml(groupLabel)} 目前沒有持有中的物資。</div>`
-            : `<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
-                <p class="text-sm font-bold text-blue-800">🧑‍🤝‍🧑 ${escapeHtml(groupLabel)} 目前持有物資</p>
-                <div class="flex flex-wrap gap-2">${renderChips(holdings)}</div>
-               </div>`;
-        return;
-    }
-
-    // 小組有子位置：分別列出每個子位置（含「未指定子位置」）目前持有的物資，
-    // 這樣才能回答「東西實際在哪個辦公室/哪台車上」而不是只看到庫房剩餘歸零。
-    const buckets = [...subLocs.map(s => ({ id: s.docId, label: s.name })), { id: UNASSIGNED_SUBLOCATION, label: '未指定使用場地' }];
-    const sections = buckets.map(b => {
-        const holdings = getGroupHoldings(groupId, b.id);
-        if (holdings.length === 0) return '';
-        return `<div class="space-y-1.5"><p class="text-xs font-bold text-blue-800">📍 ${escapeHtml(b.label)}</p><div class="flex flex-wrap gap-2">${renderChips(holdings)}</div></div>`;
-    }).filter(Boolean).join('');
-
-    wrap.innerHTML = sections
-        ? `<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-3">
-            <p class="text-sm font-bold text-blue-800">🧑‍🤝‍🧑 ${escapeHtml(groupLabel)} 目前持有物資（依使用場地）</p>
-            ${sections}
-           </div>`
-        : `<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700">🧑‍🤝‍🧑 ${escapeHtml(groupLabel)} 目前沒有持有中的物資。</div>`;
+// 該小組（可選：某個使用場地）目前領用中、尚未歸還的某物品數量
+function getGroupOutstanding(itemName, groupId, subLocationFilter) {
+    const { allocs, rets } = getCustodyRecords(itemName, groupId, subLocationFilter);
+    return allocs.reduce((sum, a) => sum + a.qty, 0) - rets.reduce((sum, r) => sum + r.qty, 0);
 }
 
 function updateAllocStockHint() {
@@ -979,188 +922,160 @@ function updateRetOutstandingHint() {
     el.className = 'text-xs font-bold mt-1.5 min-h-[1em] text-blue-700';
 }
 
-// ============ 物資總表 ============
-function calculateAndRenderInventory() {
-    const allItems = Array.from(new Set([...rawSources.map(s => s.item), ...rawAllocations.map(a => a.item), ...rawReturns.map(r => r.item)]));
-    const tbody = document.querySelector("#inventoryTable tbody");
-    const cardsWrap = document.getElementById("inventoryCards");
-    if (!tbody || !cardsWrap) return;
+// ============ 總覽（依物品彙總，取代舊版「物資總表／借用報表／目前位置」三個畫面） ============
+function timestampToDate(ts) {
+    return ts && typeof ts.toDate === 'function' ? ts.toDate() : (ts instanceof Date ? ts : null);
+}
+
+function allocReturnEvents(allocs, rets) {
+    return [
+        ...allocs.map(a => ({ ts: a.timestamp, icon: '📤', verb: '領出', qty: a.qty, handler: a.user, serial: a.serial })),
+        ...rets.map(r => ({ ts: r.timestamp, icon: '📋', verb: '歸還', qty: r.qty, handler: r.receiver, serial: r.serial, note: r.note }))
+    ];
+}
+
+function sourceEvents(sources) {
+    return sources.map(s => ({ ts: s.timestamp, icon: '📥', verb: '入庫', qty: s.qty, handler: s.source, serial: s.serial }));
+}
+
+// 把一組事件整理成「最新異動日期」＋「逐筆明細 HTML」，保管中／全部歷史／庫房待發列共用
+function buildCustodyDetail(events) {
+    const sorted = [...events].sort((x, y) => (timestampToDate(y.ts)?.getTime() ?? 0) - (timestampToDate(x.ts)?.getTime() ?? 0));
+    const latestDate = sorted.length ? formatTimestamp(sorted[0].ts) : '-';
+    const detailHtml = sorted.map(e => {
+        const serial = formatSerial(e.serial);
+        return `<div>${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${e.icon} ${e.verb} <b>${e.qty}</b>（${escapeHtml(e.handler)}）・${formatTimestamp(e.ts)}${e.note ? `・備註：${escapeHtml(e.note)}` : ''}</div>`;
+    }).join('') || `<div class="text-[var(--brown-300)]">尚無詳細紀錄</div>`;
+    return { latestDate, detailHtml };
+}
+
+function overviewRowHtml({ icon, label, rightHtml, events }) {
+    const { latestDate, detailHtml } = buildCustodyDetail(events);
+    return `
+        <details class="plain-details">
+            <summary class="ios-list-row">
+                <span>${icon}</span>
+                <span class="flex-1 text-sm font-bold text-[var(--brown-800)] truncate">${escapeHtml(label)}</span>
+                <span class="text-[10px] text-[var(--brown-400)] shrink-0">${latestDate}</span>
+                ${rightHtml}
+                <span class="detail-caret text-[var(--brown-300)] shrink-0">▾</span>
+            </summary>
+            <div class="px-4 pb-3 pt-1 space-y-1 text-xs text-[var(--brown-500)] border-t border-[rgba(216,188,133,0.35)]">${detailHtml}</div>
+        </details>
+    `;
+}
+
+// 依小組（有使用場地就再拆一層）列舉出「保管單位桶」，保管中／全部歷史模式共用
+function custodyBuckets(groupId, groupName) {
+    const subLocs = getSubLocationsByGroup(groupId);
+    if (subLocs.length === 0) return [{ filter: undefined, label: groupName }];
+    return [
+        ...subLocs.map(s => ({ filter: s.docId, label: `${groupName} 📍${s.name}` })),
+        { filter: UNASSIGNED_SUBLOCATION, label: `${groupName}（未指定場地）` }
+    ];
+}
+
+// 保管中模式：一列＝一個目前有庫存的保管位置（庫房待發／小組／小組＋使用場地）
+function renderOverviewActiveRows(itemName, groupFilter) {
+    const rows = [];
+    if (!groupFilter) {
+        const remaining = getItemRemaining(itemName);
+        if (remaining > 0) {
+            const itemSrcs = rawSources.filter(s => s.item === itemName);
+            rows.push(overviewRowHtml({
+                icon: '📦', label: '庫房待發',
+                rightHtml: `<b class="stat-value text-[var(--brown-700)] shrink-0">${remaining}</b>`,
+                events: sourceEvents(itemSrcs)
+            }));
+        }
+    }
+    const groupsToShow = groupFilter ? rawGroups.filter(g => g.docId === groupFilter) : rawGroups;
+    groupsToShow.forEach(g => {
+        custodyBuckets(g.docId, g.name).forEach(bucket => {
+            const { allocs, rets } = getCustodyRecords(itemName, g.docId, bucket.filter);
+            const qty = allocs.reduce((s, a) => s + a.qty, 0) - rets.reduce((s, r) => s + r.qty, 0);
+            if (qty <= 0) return;
+            rows.push(overviewRowHtml({
+                icon: '👥', label: bucket.label,
+                rightHtml: `<b class="stat-value text-[var(--brown-700)] shrink-0">${qty}</b>`,
+                events: allocReturnEvents(allocs, rets)
+            }));
+        });
+    });
+    return rows.join('');
+}
+
+// 全部歷史模式：一列＝一個小組（＋使用場地）針對這個物品的累計借用（不因歸還而減少）
+function renderOverviewHistoryRows(itemName, groupFilter) {
+    const rows = [];
+    const groupsToShow = groupFilter ? rawGroups.filter(g => g.docId === groupFilter) : rawGroups;
+    groupsToShow.forEach(g => {
+        custodyBuckets(g.docId, g.name).forEach(bucket => {
+            const { allocs, rets } = getCustodyRecords(itemName, g.docId, bucket.filter);
+            const total = allocs.reduce((s, a) => s + a.qty, 0);
+            if (total === 0) return;
+            const outstanding = total - rets.reduce((s, r) => s + r.qty, 0);
+            const statusHtml = outstanding > 0 ? `<span class="text-rose-600 font-bold">未還${outstanding}</span>` : `<span class="text-emerald-600 font-bold">已歸還</span>`;
+            rows.push(overviewRowHtml({
+                icon: '👥', label: bucket.label,
+                rightHtml: `<span class="text-xs text-[var(--brown-500)] shrink-0">累計<b class="stat-value">${total}</b>・${statusHtml}</span>`,
+                events: allocReturnEvents(allocs, rets)
+            }));
+        });
+    });
+    return rows.join('');
+}
+
+function renderOverviewList() {
+    const listWrap = document.getElementById('overviewList');
+    if (!listWrap) return;
+
+    const allItems = Array.from(new Set([...rawSources.map(s => s.item), ...rawAllocations.map(a => a.item), ...rawReturns.map(r => r.item)])).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
 
     if (allItems.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-[var(--brown-300)] font-medium">目前尚無庫存異動紀錄。請前往【進出作業】分頁登錄。</td></tr>`;
-        cardsWrap.innerHTML = `<div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">目前尚無庫存異動紀錄。<br>請前往【進出作業】分頁登錄。</div>`;
-        updateAllocStockHint();
-        updateRetOutstandingHint();
-        renderAllChips();
-        renderGroupHoldings();
-        renderGroupBorrowReport();
+        listWrap.innerHTML = `<div class="ios-list"><div class="ios-list-row"><span class="text-sm text-[var(--brown-300)]">目前尚無庫存異動紀錄，請前往【進出作業】分頁登錄。</span></div></div>`;
         return;
     }
 
-    const filterText = (document.getElementById('invFilterItem')?.value || '').trim();
-    const displayItems = filterText ? allItems.filter(name => name.includes(filterText)) : allItems;
+    const searchInput = document.getElementById('ovSearch');
+    const searchText = (searchInput?.value || '').trim();
+    searchInput?.closest('.ios-search')?.classList.toggle('has-text', !!searchText);
+    const mode = document.querySelector('.ov-seg-btn.is-active')?.dataset.mode || 'active';
+    const groupFilter = document.getElementById('invFilterGroup')?.value || '';
+
+    const displayItems = searchText ? allItems.filter(name => name.includes(searchText)) : allItems;
 
     if (displayItems.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-[var(--brown-300)] font-medium">沒有符合「${escapeHtml(filterText)}」的物品。</td></tr>`;
-        cardsWrap.innerHTML = `<div class="p-8 text-center text-[var(--brown-300)] font-medium text-sm">沒有符合「${escapeHtml(filterText)}」的物品。</div>`;
-        updateAllocStockHint();
-        updateRetOutstandingHint();
-        renderAllChips();
-        renderGroupHoldings();
-        renderGroupBorrowReport();
+        listWrap.innerHTML = `<div class="ios-list"><div class="ios-list-row"><span class="text-sm text-[var(--brown-300)]">沒有符合「${escapeHtml(searchText)}」的物品。</span></div></div>`;
         return;
     }
 
-    let tableHtml = "";
-    let cardsHtml = "";
-
-    displayItems.forEach(itemName => {
-        const itemSrcs = rawSources.filter(s => s.item === itemName);
-        const totalA = itemSrcs.reduce((sum, s) => sum + s.qty, 0);
-        const detailsA = itemSrcs.map(s => {
-            const serial = formatSerial(s.serial);
-            const sourceLabel = s.sourceType === 'own' ? '存放位置' : '來源';
-            return `<span class="block text-xs text-[var(--brown-400)]">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}<b class="text-[var(--brown-600)]">${escapeHtml(itemName)}</b> ${sourceTypeIcon(s.sourceType)} ${sourceLabel}：${escapeHtml(s.source)} : <b>${s.qty}</b>${s.method ? ` (${escapeHtml(s.method)})` : ''}</span>`;
-        }).join('');
-
-        const itemAllocs = rawAllocations.filter(a => a.item === itemName);
-        const totalB = itemAllocs.reduce((sum, a) => sum + a.qty, 0);
-        const detailsB = itemAllocs.map(a => {
-            const g = findGroupByStoredId(a.groupId);
-            const sl = findSubLocationById(a.subLocationId);
-            const serial = formatSerial(a.serial);
-            return `<span class="block text-xs text-[var(--brown-400)]">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${g ? escapeHtml(g.name) : '未知小組'}${sl ? ` 📍${escapeHtml(sl.name)}` : ''} : <b>${a.qty}</b> (${escapeHtml(a.user)})</span>`;
-        }).join('');
-
-        const totalC = rawReturns.filter(r => r.item === itemName).reduce((sum, r) => sum + r.qty, 0);
-        const 流浪中 = totalB - totalC;
-        const 庫房剩餘 = totalA - totalB + totalC;
-        const locationLines = getItemLocationBreakdown(itemName)
-            .map(x => `<span class="block text-xs text-[var(--brown-400)]">${x.label} : <b class="stat-value text-[var(--brown-700)]">${x.qty}</b></span>`)
-            .join('') || `<span class="block text-xs text-[var(--brown-300)]">目前無庫存異動</span>`;
-
-        tableHtml += `
-            <tr class="hover:bg-[var(--tan-100)]/60 transition-colors">
-                <td class="p-4 font-bold text-[var(--brown-900)]">${escapeHtml(itemName)}</td>
-                <td class="p-4 stat-value text-[var(--brown-800)]">${totalA}</td>
-                <td class="p-4">${detailsA || '-'}</td>
-                <td class="p-4 stat-value text-blue-700">${totalB}</td>
-                <td class="p-4">${detailsB || '-'}</td>
-                <td class="p-4 stat-value text-emerald-700">${totalC}</td>
-                <td class="p-4 font-bold ${流浪中 > 0 ? 'text-rose-600' : 'text-[var(--brown-300)]'}">${流浪中}</td>
-                <td class="p-4 bg-[var(--brown-900)] text-[var(--cream)] stat-value text-center text-base">${庫房剩餘}</td>
-                <td class="p-4">${locationLines}</td>
-            </tr>
-        `;
-
-        cardsHtml += `
-            <div class="p-4 space-y-2.5">
-                <div class="flex items-center justify-between gap-2">
-                    <h4 class="font-black text-[var(--brown-900)] text-base">${escapeHtml(itemName)}</h4>
-                    <span class="bg-[var(--brown-900)] text-[var(--cream)] stat-value text-lg px-3 py-1 rounded-lg shrink-0">${庫房剩餘}</span>
-                </div>
-                <div class="grid grid-cols-3 gap-2 text-center text-xs">
-                    <div class="bg-[var(--tan-100)] rounded-lg py-1.5 border border-[var(--tan-300)]">
-                        <div class="stat-value text-[var(--brown-800)]">${totalA}</div><div class="text-[var(--brown-400)]">總借入</div>
-                    </div>
-                    <div class="bg-blue-50 rounded-lg py-1.5 border border-blue-100">
-                        <div class="stat-value text-blue-700">${totalB}</div><div class="text-blue-400">已領</div>
-                    </div>
-                    <div class="bg-emerald-50 rounded-lg py-1.5 border border-emerald-100">
-                        <div class="stat-value text-emerald-700">${totalC}</div><div class="text-emerald-400">已還</div>
-                    </div>
-                </div>
-                ${流浪中 > 0 ? `<div class="text-xs font-bold text-rose-600">⚠️ 流浪中：尚有 ${流浪中} 件未歸還</div>` : ''}
-                <div class="text-xs text-[var(--brown-500)] space-y-2 pt-1.5 border-t border-dashed border-[var(--tan-300)]">
-                    <div><b class="text-[var(--brown-700)]">來源：</b>${detailsA || '-'}</div>
-                    <div><b class="text-[var(--brown-700)]">分配：</b>${detailsB || '-'}</div>
-                    <div><b class="text-[var(--brown-700)]">目前位置：</b>${locationLines}</div>
-                </div>
+    const sections = displayItems.map(itemName => {
+        const rowsHtml = mode === 'all' ? renderOverviewHistoryRows(itemName, groupFilter) : renderOverviewActiveRows(itemName, groupFilter);
+        if (!rowsHtml) return '';
+        return `
+            <div>
+                <p class="ios-section-header">${escapeHtml(itemName)}</p>
+                <div class="ios-list">${rowsHtml}</div>
             </div>
         `;
-    });
+    }).filter(Boolean).join('');
 
-    tbody.innerHTML = tableHtml;
-    cardsWrap.innerHTML = cardsHtml;
+    listWrap.innerHTML = sections || `<div class="ios-list"><div class="ios-list-row"><span class="text-sm text-[var(--brown-300)]">${groupFilter ? '這個小組目前沒有符合條件的紀錄。' : '沒有符合條件的紀錄。'}</span></div></div>`;
+}
 
+// 沿用舊函式名稱，減少呼叫端（各 onSnapshot 監聽器）需要調整的範圍
+function calculateAndRenderInventory() {
     updateAllocStockHint();
     updateRetOutstandingHint();
     renderAllChips();
-    renderGroupHoldings();
-    renderGroupBorrowReport();
-}
-
-// 各小組累計借用總覽（不因歸還而減少，做為下次類似任務的整備參考）
-function getGroupBorrowSummary(groupId) {
-    const items = Array.from(new Set(rawAllocations.filter(a => String(a.groupId) === String(groupId)).map(a => a.item)));
-    return items.map(item => {
-        const total = rawAllocations.filter(a => a.item === item && String(a.groupId) === String(groupId)).reduce((sum, a) => sum + a.qty, 0);
-        const returned = rawReturns.filter(r => r.item === item && String(r.groupId) === String(groupId)).reduce((sum, r) => sum + r.qty, 0);
-        return { item, total, returned, outstanding: total - returned };
-    }).filter(x => x.total > 0);
-}
-
-function renderGroupBorrowReport() {
-    const el = document.getElementById('groupBorrowReport');
-    if (!el) return;
-
-    if (rawGroups.length === 0) {
-        el.innerHTML = `<div class="card p-8 text-center text-[var(--brown-300)] font-medium text-sm">尚無小組資料，請先於「設定」分頁新增小組。</div>`;
-        return;
-    }
-
-    el.innerHTML = rawGroups.map(g => {
-        const summary = getGroupBorrowSummary(g.docId);
-        const rows = summary.length === 0
-            ? `<div class="px-4 py-3 text-xs text-[var(--brown-300)]">尚無借用紀錄</div>`
-            : summary.map(s => {
-                const allocs = rawAllocations.filter(a => a.item === s.item && String(a.groupId) === String(g.docId));
-                const rets = rawReturns.filter(r => r.item === s.item && String(r.groupId) === String(g.docId));
-                const allocLines = allocs.map(a => {
-                    const serial = formatSerial(a.serial);
-                    const sl = findSubLocationById(a.subLocationId);
-                    return `<div>${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}📤 領用 <b>${a.qty}</b>（${escapeHtml(a.user)}）${sl ? ` ・📍${escapeHtml(sl.name)}` : ''}・${formatTimestamp(a.timestamp)}</div>`;
-                }).join('') || `<div class="text-[var(--brown-300)]">尚無領用紀錄</div>`;
-                const retLines = rets.map(r => {
-                    const serial = formatSerial(r.serial);
-                    const sl = findSubLocationById(r.subLocationId);
-                    return `<div>${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}📋 歸還 <b>${r.qty}</b>（${escapeHtml(r.receiver)}）${sl ? ` ・📍${escapeHtml(sl.name)}` : ''}・${formatTimestamp(r.timestamp)}${r.note ? `・備註：${escapeHtml(r.note)}` : ''}</div>`;
-                }).join('') || `<div class="text-[var(--brown-300)]">尚無歸還紀錄</div>`;
-                return `
-                <details class="plain-details">
-                    <summary class="px-4 py-3 flex items-center justify-between gap-3">
-                        <span class="font-bold text-sm text-[var(--brown-900)] truncate">${escapeHtml(s.item)}</span>
-                        <span class="text-xs text-[var(--brown-500)] text-right shrink-0 flex items-center gap-1">
-                            <span>累計 <b class="text-[var(--brown-800)]">${s.total}</b>・已還 ${s.returned}・${s.outstanding > 0 ? `<b class="text-rose-600">未還 ${s.outstanding}</b>` : '已全數歸還'}</span>
-                            <span class="detail-caret text-[var(--brown-300)]">▾</span>
-                        </span>
-                    </summary>
-                    <div class="px-4 pb-3 pt-1 space-y-1 text-xs text-[var(--brown-500)] bg-[var(--tan-100)]/50 border-t border-dashed border-[var(--tan-300)]">
-                        <div class="font-bold text-[var(--brown-700)] pt-1.5">領用明細</div>
-                        ${allocLines}
-                        <div class="font-bold text-[var(--brown-700)] pt-1.5">歸還明細</div>
-                        ${retLines}
-                    </div>
-                </details>
-            `;
-            }).join('');
-        return `
-            <div class="card overflow-hidden">
-                <div class="card-header">
-                    <h4 class="font-bold text-[var(--brown-900)] text-sm flex items-center gap-2 font-serif-tc">
-                        <span class="w-1.5 h-4 bg-violet-600 rounded-full"></span> 👥 ${escapeHtml(g.name)}
-                    </h4>
-                </div>
-                <div class="divide-y divide-[var(--tan-200)]">${rows}</div>
-            </div>
-        `;
-    }).join('');
+    renderOverviewList();
 }
 
 // 全新的入庫來源交易紀錄：以個別入庫事件（而非依物品彙總）列出，預設只顯示物品名稱與
 // 數量，點擊展開才看到單號、來源類型、方式、備註與時間等完整資訊。
 function formatTimestamp(ts) {
-    const d = ts && typeof ts.toDate === 'function' ? ts.toDate() : (ts instanceof Date ? ts : null);
+    const d = timestampToDate(ts);
     if (!d) return '-';
     const pad = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -1187,6 +1102,21 @@ function openRecordActionSheet(collectionName, docId) {
 function closeRecordActionSheet() {
     actionSheetTarget = null;
     document.getElementById('recordActionSheet').classList.add('hidden');
+}
+
+// ============ 設定頁清單項目操作選單（快捷選項／小組／使用場地／連結共用「⋮」） ============
+let listItemActionTarget = null;
+
+function openListItemActionSheet({ canMoveUp, canMoveDown, onMoveUp, onMoveDown, onEdit, onDelete }) {
+    listItemActionTarget = { onMoveUp, onMoveDown, onEdit, onDelete };
+    document.getElementById('btnListItemMoveUp').classList.toggle('hidden', !canMoveUp);
+    document.getElementById('btnListItemMoveDown').classList.toggle('hidden', !canMoveDown);
+    document.getElementById('listItemActionSheet').classList.remove('hidden');
+}
+
+function closeListItemActionSheet() {
+    listItemActionTarget = null;
+    document.getElementById('listItemActionSheet').classList.add('hidden');
 }
 
 function renderSourceLog() {
@@ -1556,6 +1486,15 @@ function bindGlobalEvents() {
         }
     };
 
+    document.getElementById('btnListItemCancel').onclick = closeListItemActionSheet;
+    document.getElementById('listItemActionSheet').addEventListener('click', (e) => {
+        if (e.target.id === 'listItemActionSheet') closeListItemActionSheet();
+    });
+    document.getElementById('btnListItemMoveUp').onclick = () => { const t = listItemActionTarget; closeListItemActionSheet(); t?.onMoveUp?.(); };
+    document.getElementById('btnListItemMoveDown').onclick = () => { const t = listItemActionTarget; closeListItemActionSheet(); t?.onMoveDown?.(); };
+    document.getElementById('btnListItemEdit').onclick = () => { const t = listItemActionTarget; closeListItemActionSheet(); t?.onEdit?.(); };
+    document.getElementById('btnListItemDelete').onclick = () => { const t = listItemActionTarget; closeListItemActionSheet(); t?.onDelete?.(); };
+
     document.getElementById('btnAddGroup').onclick = addGroup;
     document.getElementById('newGroupName').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); addGroup(); }
@@ -1583,8 +1522,20 @@ function bindGlobalEvents() {
     document.getElementById('allocGroup').addEventListener('change', () => refreshSubLocationSelect('allocGroup', 'allocSubLocation'));
     document.getElementById('retGroup').addEventListener('change', () => refreshSubLocationSelect('retGroup', 'retSubLocation'));
 
-    document.getElementById('invFilterItem').addEventListener('input', calculateAndRenderInventory);
-    document.getElementById('invFilterGroup').addEventListener('change', renderGroupHoldings);
+    document.getElementById('ovSearch').addEventListener('input', renderOverviewList);
+    document.getElementById('ovSearchClear').addEventListener('click', () => {
+        const input = document.getElementById('ovSearch');
+        input.value = '';
+        input.focus();
+        renderOverviewList();
+    });
+    document.querySelectorAll('.ov-seg-btn').forEach(b => {
+        b.onclick = () => {
+            document.querySelectorAll('.ov-seg-btn').forEach(x => x.classList.toggle('is-active', x === b));
+            renderOverviewList();
+        };
+    });
+    document.getElementById('invFilterGroup').addEventListener('change', renderOverviewList);
 
     document.getElementById('btnSrcSubmit').onclick = async () => {
         if (!currentProjectId) return;
