@@ -15,6 +15,7 @@
     --olive: #6B7A3D;
     --olive-dark: #566432;
     --violet: #6D28D9;
+    --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 * { font-family: 'Noto Sans TC', sans-serif; }
 .font-serif-tc { font-family: 'Noto Serif TC', serif; }
@@ -38,56 +39,79 @@ h1, h2, h3, .card-header {
     letter-spacing: 0.1em;
 }
 .status-done-line { text-decoration: line-through; opacity: 0.55; }
+
+/* ============ iOS 26 液態玻璃：卡片/面板 ============ */
 .card {
-    background: var(--paper);
-    border: 1px solid var(--tan-300);
-    border-radius: 1rem;
-    box-shadow: 0 2px 10px rgba(84,51,25,0.08);
+    background: rgba(255, 252, 245, 0.6);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 1.35rem;
+    box-shadow: 0 8px 30px rgba(84,51,25,0.10), inset 0 1px 0 rgba(255,255,255,0.6);
 }
 .card-header {
     padding: 1rem 1.25rem;
-    border-bottom: 1px dashed var(--tan-300);
-    background: var(--tan-100);
-    border-radius: 1rem 1rem 0 0;
+    border-bottom: 1px solid rgba(216,188,133,0.4);
+    background: rgba(243,228,198,0.5);
+    backdrop-filter: blur(12px) saturate(160%);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    border-radius: 1.35rem 1.35rem 0 0;
 }
 .field {
     min-height: 44px;
     width: 100%;
     padding: 0.6rem 0.9rem;
-    border-radius: 0.65rem;
-    border: 1px solid var(--tan-300);
-    background: var(--paper);
+    border-radius: 0.85rem;
+    border: 1px solid rgba(216,188,133,0.6);
+    background: rgba(255,252,245,0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     font-size: 0.875rem;
     color: var(--brown-900);
 }
 .field:focus { outline: none; border-color: var(--clay); box-shadow: 0 0 0 3px rgba(181,101,29,0.15); }
 .field::placeholder { color: var(--brown-300); }
+
+/* ============ iOS 26 液態玻璃：按鈕（圓潤＋玻璃＋彈簧回彈） ============ */
 .btn {
     min-height: 44px;
-    border-radius: 4px;
-    border: 2px solid currentColor;
-    font-weight: 600;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.35);
+    font-weight: 700;
     font-size: 0.875rem;
-    padding: 12px 24px;
-    text-transform: uppercase;
-    transition: transform .05s ease, filter .15s ease;
-    box-shadow: 0 2px 0 rgba(0,0,0,0.15);
+    padding: 0.65rem 1.5rem;
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.4);
+    transition: transform 0.38s var(--spring), box-shadow .2s ease, filter .15s ease;
 }
-.btn:active { transform: translateY(1px); }
-.btn-clay { background: var(--clay); color: var(--cream); }
+.btn:active { transform: scale(0.94); transition: transform 0.08s ease-out; }
+.btn-clay { background: linear-gradient(160deg, rgba(181,101,29,0.92), rgba(149,78,19,0.88)); color: var(--cream); }
 .btn-clay:hover { filter: brightness(1.08); }
-.btn-olive { background: var(--olive); color: var(--cream); }
+.btn-olive { background: linear-gradient(160deg, rgba(107,122,61,0.92), rgba(86,100,50,0.88)); color: var(--cream); }
 .btn-olive:hover { filter: brightness(1.08); }
-.btn-brown { background: var(--brown-700); color: var(--cream); }
+.btn-brown { background: linear-gradient(160deg, rgba(107,66,38,0.92), rgba(84,51,25,0.88)); color: var(--cream); }
 .btn-brown:hover { filter: brightness(1.1); }
-.btn-violet { background: var(--violet); color: var(--cream); }
+.btn-violet { background: linear-gradient(160deg, rgba(109,40,217,0.92), rgba(88,28,181,0.88)); color: var(--cream); }
 .btn-violet:hover { filter: brightness(1.1); }
 
-.subtab-btn { min-height: 44px; }
-.subtab-btn.is-active { background: var(--clay); color: var(--cream); box-shadow: 0 2px 6px rgba(181,101,29,0.35); }
+.subtab-btn {
+    min-height: 44px;
+    transition: transform 0.35s var(--spring), background .2s ease, color .2s ease, box-shadow .2s ease;
+}
+.subtab-btn:active { transform: scale(0.96); transition: transform 0.08s ease-out; }
+.subtab-btn.is-active {
+    background: linear-gradient(160deg, rgba(181,101,29,0.92), rgba(149,78,19,0.88));
+    color: var(--cream);
+    box-shadow: 0 2px 10px rgba(181,101,29,0.35), inset 0 1px 0 rgba(255,255,255,0.35);
+}
 .subtab-btn:not(.is-active) { color: var(--brown-700); }
 
-.tab-btn { min-height: 56px; }
+.tab-btn {
+    min-height: 56px;
+    transition: transform 0.35s var(--spring);
+}
+.tab-btn:active { transform: scale(0.92); transition: transform 0.08s ease-out; }
 .tab-btn .tab-icon { font-size: 1.35rem; line-height: 1; }
 .tab-btn .tab-label { font-size: 0.68rem; font-weight: 700; }
 .tab-btn.is-active { color: var(--clay-dark); }
@@ -95,30 +119,52 @@ h1, h2, h3, .card-header {
 .tab-btn:not(.is-active) { color: var(--brown-300); }
 .tab-indicator { opacity: 0; transition: opacity .15s ease; }
 
-#bottomNav { padding-bottom: env(safe-area-inset-bottom, 0px); }
+/* 底部導覽列：iOS 風格的半透明毛玻璃工具列 */
+#bottomNav {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: rgba(255, 252, 245, 0.72) !important;
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
 
 .version-badge {
     font-size: 10px;
     color: var(--brown-400);
-    background: var(--tan-100);
-    border: 1px solid var(--tan-300);
+    background: rgba(243,228,198,0.6);
+    border: 1px solid rgba(255,255,255,0.4);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
 .qp-row {
     min-height: 44px;
-    background: var(--paper);
-    border: 1px solid var(--tan-300);
-    border-radius: 0.65rem;
+    background: rgba(255,252,245,0.65);
+    border: 1px solid rgba(216,188,133,0.55);
+    border-radius: 0.85rem;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
-.qp-icon-btn { min-width: 36px; min-height: 36px; }
+.qp-icon-btn {
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(243,228,198,0.5);
+    transition: transform 0.35s var(--spring), background .15s ease;
+}
+.qp-icon-btn:active { transform: scale(0.88); background: rgba(216,188,133,0.6); transition: transform .08s ease-out; }
 
 /* 快速選取膠囊按鈕（取代下拉選單） */
 .qp-chip {
     min-height: 36px;
     padding: 0.4rem 0.8rem;
     border-radius: 999px;
-    background: var(--tan-100);
-    border: 1px solid var(--tan-300);
+    background: rgba(243,228,198,0.6);
+    border: 1px solid rgba(216,188,133,0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     color: var(--brown-700);
     font-size: 0.78rem;
     font-weight: 700;
@@ -126,11 +172,11 @@ h1, h2, h3, .card-header {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    transition: filter .1s ease, transform .05s ease;
+    transition: transform 0.35s var(--spring), filter .1s ease, background .15s ease;
 }
-.qp-chip:active { transform: translateY(1px); }
+.qp-chip:active { transform: scale(0.94); transition: transform 0.08s ease-out; }
 .qp-chip.is-selected {
-    background: var(--clay);
+    background: linear-gradient(160deg, rgba(181,101,29,0.92), rgba(149,78,19,0.88));
     border-color: var(--clay-dark);
     color: var(--cream);
 }
@@ -144,7 +190,7 @@ h1, h2, h3, .card-header {
 }
 .qp-chip.is-selected .qp-chip-stock { background: rgba(0,0,0,0.25); }
 
-/* 借用報表明細展開列 */
+/* 借用報表/總覽明細展開列 */
 .plain-details > summary { list-style: none; cursor: pointer; }
 .plain-details > summary::-webkit-details-marker { display: none; }
 .plain-details[open] > summary .detail-caret { transform: rotate(180deg); }
@@ -152,13 +198,16 @@ h1, h2, h3, .card-header {
 
 /* 專案卡片（Level 0 主控台） */
 .project-card {
-    background: var(--paper);
-    border: 1px solid var(--tan-300);
-    border-radius: 0.9rem;
+    background: rgba(255,252,245,0.6);
+    backdrop-filter: blur(16px) saturate(170%);
+    -webkit-backdrop-filter: blur(16px) saturate(170%);
+    border: 1px solid rgba(255,255,255,0.45);
+    border-radius: 1rem;
     min-height: 44px;
-    box-shadow: 0 2px 8px rgba(84,51,25,0.06);
+    box-shadow: 0 4px 14px rgba(84,51,25,0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+    transition: transform 0.35s var(--spring);
 }
-.project-card:active { filter: brightness(0.97); }
+.project-card:active { transform: scale(0.98); transition: transform 0.08s ease-out; }
 
 /* 返回主控台按鈕與專案頂列 */
 #projectTopBar {
@@ -192,8 +241,10 @@ h1, h2, h3, .card-header {
     width: 40px;
     height: 40px;
     border-radius: 999px;
-    background: var(--paper);
-    border: 1px solid var(--tan-300);
+    background: rgba(255,252,245,0.75);
+    backdrop-filter: blur(14px) saturate(170%);
+    -webkit-backdrop-filter: blur(14px) saturate(170%);
+    border: 1px solid rgba(255,255,255,0.5);
     box-shadow: 0 2px 10px rgba(84,51,25,0.2);
     display: flex;
     align-items: center;
@@ -212,3 +263,99 @@ h1, h2, h3, .card-header {
     list-style: none;
 }
 .changelog-card summary::-webkit-details-marker { display: none; }
+
+/* ============ iOS 26 液態玻璃：搜尋列 ============ */
+.ios-search {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 40px;
+    padding: 0 0.85rem;
+    border-radius: 999px;
+    background: rgba(243,228,198,0.55);
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    border: 1px solid rgba(255,255,255,0.45);
+}
+.ios-search input {
+    border: none;
+    background: transparent;
+    outline: none;
+    flex: 1;
+    font-size: 0.9rem;
+    color: var(--brown-900);
+    min-height: 40px;
+}
+.ios-search input::placeholder { color: var(--brown-400); }
+.ios-search .ios-search-icon { color: var(--brown-400); font-size: 0.9rem; flex-shrink: 0; }
+.ios-search .ios-search-clear {
+    display: none;
+    color: var(--brown-400);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.3s var(--spring);
+}
+.ios-search .ios-search-clear:active { transform: scale(0.85); }
+.ios-search.has-text .ios-search-clear { display: inline-flex; }
+
+/* ============ iOS 26 液態玻璃：分段控制器 ============ */
+.ios-segment {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    background: rgba(243,228,198,0.6);
+    backdrop-filter: blur(10px) saturate(150%);
+    -webkit-backdrop-filter: blur(10px) saturate(150%);
+    border: 1px solid rgba(255,255,255,0.4);
+}
+.ios-segment-btn {
+    flex: 1;
+    min-height: 34px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--brown-600);
+    transition: transform 0.3s var(--spring), background .2s ease, color .2s ease, box-shadow .2s ease;
+}
+.ios-segment-btn:active { transform: scale(0.95); transition: transform 0.08s ease-out; }
+.ios-segment-btn.is-active {
+    background: var(--paper);
+    color: var(--brown-900);
+    box-shadow: 0 2px 8px rgba(84,51,25,0.18);
+}
+
+/* ============ iOS 26 液態玻璃：分組清單（Grouped List） ============ */
+.ios-list {
+    border-radius: 1rem;
+    overflow: hidden;
+    background: rgba(255,252,245,0.55);
+    backdrop-filter: blur(18px) saturate(170%);
+    -webkit-backdrop-filter: blur(18px) saturate(170%);
+    border: 1px solid rgba(255,255,255,0.45);
+    box-shadow: 0 4px 16px rgba(84,51,25,0.08);
+}
+.ios-list-row {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid rgba(216,188,133,0.35);
+    transition: background .15s ease;
+    cursor: pointer;
+}
+.ios-list-row:last-child { border-bottom: none; }
+.ios-list-row:active { background: rgba(216,188,133,0.25); }
+.ios-chevron { color: var(--brown-300); font-size: 0.85rem; flex-shrink: 0; transition: transform .25s ease; }
+.ios-list-row[open] .ios-chevron { transform: rotate(90deg); }
+.ios-section-header {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brown-400);
+    padding: 0.9rem 0.35rem 0.4rem;
+}
