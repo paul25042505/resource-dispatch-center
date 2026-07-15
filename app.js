@@ -40,6 +40,10 @@ try {
 // v0.0.1～v0.0.20 為採用此規則前的歷史紀錄，版號僅代表累計改版次數，不做語意區分。
 const CHANGELOG = [
     {
+        version: "v2.3.0",
+        notes: "入庫登錄新增「入庫同時預劃分配給小組」選項：勾選後可以在同一次送出裡，把剛入庫的數量直接拆分給多個小組（例如入庫100個，60個先劃給行政組、40個劃給教管組），不用入庫完再跑三次領用簽收。這些分配一開始不會指定使用場地（東西仍算留在庫房，只是先登記要給誰），之後實際搬到場地時再從紀錄的「⋮」編輯補上使用場地即可。"
+    },
+    {
         version: "v2.2.1",
         notes: "修正編輯領用/歸還紀錄彈窗沒有「使用場地」欄位的問題：舊紀錄（或當初送出時沒選使用場地的紀錄）現在可以透過編輯彈窗補選/修改使用場地，選好小組後會自動列出該小組的使用場地清單。"
     },
@@ -482,6 +486,12 @@ function renderGroupSelects() {
         if (rawGroups.some(g => g.docId === prevValue)) filterEl.value = prevValue;
     }
 
+    document.querySelectorAll('.src-split-group').forEach(el => {
+        const prevValue = el.value;
+        el.innerHTML = rawGroups.map(g => `<option value="${g.docId}">${escapeHtml(g.name)}</option>`).join('');
+        if (rawGroups.some(g => g.docId === prevValue)) el.value = prevValue;
+    });
+
     refreshSubLocationSelect('allocGroup', 'allocSubLocation');
     refreshSubLocationSelect('retGroup', 'retSubLocation');
 }
@@ -718,6 +728,28 @@ async function addGroup() {
     } catch (err) {
         alert(firestoreErrorMessage('新增小組', err));
     }
+}
+
+// ============ 入庫同時預劃分配給小組（東西仍留在庫房，先登記要給誰） ============
+function addSplitRow() {
+    const wrap = document.getElementById('srcSplitRows');
+    if (!wrap) return;
+    const row = document.createElement('div');
+    row.className = 'flex gap-2 src-split-row';
+    row.innerHTML = `
+        <select class="field flex-1 src-split-group">${rawGroups.map(g => `<option value="${g.docId}">${escapeHtml(g.name)}</option>`).join('')}</select>
+        <input type="number" inputmode="numeric" placeholder="數量" min="1" class="field w-24 src-split-qty">
+        <button type="button" class="qp-icon-btn src-split-remove text-rose-600">❌</button>
+    `;
+    row.querySelector('.src-split-remove').onclick = () => row.remove();
+    wrap.appendChild(row);
+}
+
+function resetSplitForm() {
+    document.getElementById('srcSplitToggle').checked = false;
+    document.getElementById('srcSplitWrap').classList.add('hidden');
+    document.getElementById('srcSplitUser').value = '';
+    document.getElementById('srcSplitRows').innerHTML = '';
 }
 
 // ============ 快捷選取清單（逐專案獨立） ============
@@ -1548,6 +1580,12 @@ function bindGlobalEvents() {
         renderAllChips();
     });
 
+    document.getElementById('srcSplitToggle').addEventListener('change', (e) => {
+        document.getElementById('srcSplitWrap').classList.toggle('hidden', !e.target.checked);
+        if (e.target.checked && document.getElementById('srcSplitRows').children.length === 0) addSplitRow();
+    });
+    document.getElementById('btnAddSplitRow').onclick = addSplitRow;
+
     document.getElementById('allocItem').addEventListener('input', updateAllocStockHint);
     document.getElementById('retItem').addEventListener('input', updateRetOutstandingHint);
     document.getElementById('retGroup').addEventListener('change', updateRetOutstandingHint);
@@ -1584,14 +1622,39 @@ function bindGlobalEvents() {
         if (!item || !source || isNaN(qty)) return alert("請完整填寫項目、來源與數量");
         if (sourceType !== 'own' && methodSelect === '其他' && !methodOther) return alert("請填寫「其他」借入方式的說明");
 
+        const splitEnabled = document.getElementById('srcSplitToggle').checked;
+        const splitUser = document.getElementById('srcSplitUser').value.trim();
+        const splitRows = Array.from(document.querySelectorAll('.src-split-row')).map(row => ({
+            groupId: row.querySelector('.src-split-group').value,
+            qty: parseInt(row.querySelector('.src-split-qty').value)
+        }));
+        if (splitEnabled) {
+            if (splitRows.length === 0 || splitRows.some(r => isNaN(r.qty) || r.qty <= 0)) return alert("請完整填寫每個分配對象的數量");
+            if (!splitUser) return alert("請填寫經辦／領用人");
+            const splitTotal = splitRows.reduce((sum, r) => sum + r.qty, 0);
+            if (splitTotal > qty) {
+                if (!confirm(`分配總數 ${splitTotal} 件超過這次入庫的 ${qty} 件，仍要繼續嗎？`)) return;
+            }
+        }
+
         const serial = await getNextSerialNumber();
         await addDoc(collection(db, 'projects', currentProjectId, 'sources'), { item, sourceType, source, qty, method, note, serial, timestamp: new Date() });
         await ensureQuickpick('item', item);
         await ensureQuickpick(sourceType === 'own' ? 'source_own' : 'source_external', source);
+
+        if (splitEnabled) {
+            for (const r of splitRows) {
+                const allocSerial = await getNextSerialNumber();
+                await addDoc(collection(db, 'projects', currentProjectId, 'allocations'), { item, groupId: r.groupId, subLocationId: '', qty: r.qty, user: splitUser, serial: allocSerial, timestamp: new Date() });
+            }
+            await ensureQuickpick('person', splitUser);
+        }
+
         document.getElementById('srcItem').value = ''; document.getElementById('srcQty').value = '';
         document.getElementById('srcMethodOther').value = ''; document.getElementById('srcMethodOther').classList.add('hidden');
         document.getElementById('srcMethod').value = '借據';
-        showToast('✅ 登錄完成');
+        resetSplitForm();
+        showToast(splitEnabled ? '✅ 登錄完成，已預劃分配' : '✅ 登錄完成');
     };
 
     document.getElementById('btnAllocSubmit').onclick = async () => {
