@@ -40,6 +40,10 @@ try {
 // v0.0.1～v0.0.20 為採用此規則前的歷史紀錄，版號僅代表累計改版次數，不做語意區分。
 const CHANGELOG = [
     {
+        version: "v2.1.0",
+        notes: "總覽頁點開一列展開後，每一筆逐筆明細（入庫／領出／歸還）都新增「⋮」，可直接編輯或刪除那筆原始紀錄，跟入庫來源紀錄／領用紀錄／歸還紀錄共用同一套編輯彈窗與底部操作選單，不用再跑去「原始紀錄」區塊才能改。"
+    },
+    {
         version: "v2.0.0",
         notes: "整套介面大改版。底部導覽列從 4 個精簡成 3 個（總覽／進出作業／設定），原本的「物資總表」「借用報表」「目前位置」三個分散畫面合併成一個「總覽」：可搜尋物品、用「保管中／全部歷史」分段控制切換「東西現在在哪」跟「這次任務總共借了什麼」兩種視角，依小組篩選、依物品分組列表，點一列展開看逐筆經手人與日期；原本的入庫/領用/歸還逐筆紀錄收進「原始紀錄」收合區塊。設定頁的小組、使用場地、快捷選項、連結清單，全面改成點「⋮」才彈出編輯/刪除/排序選單，不再常駐一排按鈕。視覺風格改為 iOS 26 液態玻璃：卡片與按鈕改用半透明毛玻璃材質、圓潤轉角，按鈕按下會有彈簧回彈效果，取代 v0.0.20 的方角硬邊風格。"
     },
@@ -929,22 +933,26 @@ function timestampToDate(ts) {
 
 function allocReturnEvents(allocs, rets) {
     return [
-        ...allocs.map(a => ({ ts: a.timestamp, icon: '📤', verb: '領出', qty: a.qty, handler: a.user, serial: a.serial })),
-        ...rets.map(r => ({ ts: r.timestamp, icon: '📋', verb: '歸還', qty: r.qty, handler: r.receiver, serial: r.serial, note: r.note }))
+        ...allocs.map(a => ({ ts: a.timestamp, icon: '📤', verb: '領出', qty: a.qty, handler: a.user, serial: a.serial, collection: 'allocations', docId: a.docId })),
+        ...rets.map(r => ({ ts: r.timestamp, icon: '📋', verb: '歸還', qty: r.qty, handler: r.receiver, serial: r.serial, note: r.note, collection: 'returns', docId: r.docId }))
     ];
 }
 
 function sourceEvents(sources) {
-    return sources.map(s => ({ ts: s.timestamp, icon: '📥', verb: '入庫', qty: s.qty, handler: s.source, serial: s.serial }));
+    return sources.map(s => ({ ts: s.timestamp, icon: '📥', verb: '入庫', qty: s.qty, handler: s.source, serial: s.serial, collection: 'sources', docId: s.docId }));
 }
 
-// 把一組事件整理成「最新異動日期」＋「逐筆明細 HTML」，保管中／全部歷史／庫房待發列共用
+// 把一組事件整理成「最新異動日期」＋「逐筆明細 HTML」，保管中／全部歷史／庫房待發列共用；
+// 每筆明細都帶「⋮」可直接編輯/刪除該筆原始紀錄，跟入庫/領用/歸還紀錄共用同一套操作選單。
 function buildCustodyDetail(events) {
     const sorted = [...events].sort((x, y) => (timestampToDate(y.ts)?.getTime() ?? 0) - (timestampToDate(x.ts)?.getTime() ?? 0));
     const latestDate = sorted.length ? formatTimestamp(sorted[0].ts) : '-';
     const detailHtml = sorted.map(e => {
         const serial = formatSerial(e.serial);
-        return `<div>${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${e.icon} ${e.verb} <b>${e.qty}</b>（${escapeHtml(e.handler)}）・${formatTimestamp(e.ts)}${e.note ? `・備註：${escapeHtml(e.note)}` : ''}</div>`;
+        return `<div class="flex items-center gap-1.5">
+            <span class="flex-1">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${e.icon} ${e.verb} <b>${e.qty}</b>（${escapeHtml(e.handler)}）・${formatTimestamp(e.ts)}${e.note ? `・備註：${escapeHtml(e.note)}` : ''}</span>
+            <button type="button" class="record-menu-btn qp-icon-btn text-[var(--brown-500)] shrink-0" data-collection="${e.collection}" data-id="${e.docId}">⋮</button>
+        </div>`;
     }).join('') || `<div class="text-[var(--brown-300)]">尚無詳細紀錄</div>`;
     return { latestDate, detailHtml };
 }
@@ -1062,6 +1070,7 @@ function renderOverviewList() {
     }).filter(Boolean).join('');
 
     listWrap.innerHTML = sections || `<div class="ios-list"><div class="ios-list-row"><span class="text-sm text-[var(--brown-300)]">${groupFilter ? '這個小組目前沒有符合條件的紀錄。' : '沒有符合條件的紀錄。'}</span></div></div>`;
+    bindRecordMenuButtons();
 }
 
 // 沿用舊函式名稱，減少呼叫端（各 onSnapshot 監聽器）需要調整的範圍
