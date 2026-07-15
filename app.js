@@ -40,6 +40,10 @@ try {
 // v0.0.1～v0.0.20 為採用此規則前的歷史紀錄，版號僅代表累計改版次數，不做語意區分。
 const CHANGELOG = [
     {
+        version: "v2.2.1",
+        notes: "修正編輯領用/歸還紀錄彈窗沒有「使用場地」欄位的問題：舊紀錄（或當初送出時沒選使用場地的紀錄）現在可以透過編輯彈窗補選/修改使用場地，選好小組後會自動列出該小組的使用場地清單。"
+    },
+    {
         version: "v2.2.0",
         notes: "總覽頁「庫房待發」列現在會直接標示這批物資是🌐外部借入還是🏠自有／存放位置，同一物品若兩種來源都有會同時顯示兩個圖示，不用點開就能一眼看出來；點開展開後的每筆入庫明細也會分別標示來源類型。沒有記錄來源類型的舊資料則維持原樣，不會顯示錯誤的標示。"
     },
@@ -1316,6 +1320,8 @@ function openEditAllocationModal(docId) {
     document.getElementById('editAllocGroup').value = String(rec.groupId ?? '');
     document.getElementById('editAllocQty').value = rec.qty ?? '';
     document.getElementById('editAllocUser').value = rec.user || '';
+    refreshSubLocationSelect('editAllocGroup', 'editAllocSubLocation');
+    document.getElementById('editAllocSubLocation').value = rec.subLocationId || '';
     document.getElementById('editAllocationModal').classList.remove('hidden');
 }
 
@@ -1328,12 +1334,13 @@ async function saveEditedAllocation() {
     if (!editingAllocationId || !currentProjectId) return;
     const item = document.getElementById('editAllocItem').value.trim();
     const groupId = document.getElementById('editAllocGroup').value;
+    const subLocationId = document.getElementById('editAllocSubLocation').value;
     const qty = parseInt(document.getElementById('editAllocQty').value);
     const user = document.getElementById('editAllocUser').value.trim();
     if (!item || isNaN(qty) || !user) return alert('填寫不完整');
 
     try {
-        await updateDoc(doc(db, 'projects', currentProjectId, 'allocations', editingAllocationId), { item, groupId, qty, user });
+        await updateDoc(doc(db, 'projects', currentProjectId, 'allocations', editingAllocationId), { item, groupId, subLocationId, qty, user });
         closeEditAllocationModal();
     } catch (err) {
         alert(firestoreErrorMessage('儲存修改', err));
@@ -1351,6 +1358,8 @@ function openEditReturnModal(docId) {
     document.getElementById('editRetQty').value = rec.qty ?? '';
     document.getElementById('editRetReceiver').value = rec.receiver || '';
     document.getElementById('editRetNote').value = rec.note || '';
+    refreshSubLocationSelect('editRetGroup', 'editRetSubLocation');
+    document.getElementById('editRetSubLocation').value = rec.subLocationId || '';
     document.getElementById('editReturnModal').classList.remove('hidden');
 }
 
@@ -1363,13 +1372,14 @@ async function saveEditedReturn() {
     if (!editingReturnId || !currentProjectId) return;
     const item = document.getElementById('editRetItem').value.trim();
     const groupId = document.getElementById('editRetGroup').value;
+    const subLocationId = document.getElementById('editRetSubLocation').value;
     const qty = parseInt(document.getElementById('editRetQty').value);
     const receiver = document.getElementById('editRetReceiver').value.trim();
     const note = document.getElementById('editRetNote').value.trim();
     if (!item || isNaN(qty) || !receiver) return alert('填寫不完整');
 
     try {
-        await updateDoc(doc(db, 'projects', currentProjectId, 'returns', editingReturnId), { item, groupId, qty, receiver, note });
+        await updateDoc(doc(db, 'projects', currentProjectId, 'returns', editingReturnId), { item, groupId, subLocationId, qty, receiver, note });
         closeEditReturnModal();
     } catch (err) {
         alert(firestoreErrorMessage('儲存修改', err));
@@ -1543,6 +1553,8 @@ function bindGlobalEvents() {
     document.getElementById('retGroup').addEventListener('change', updateRetOutstandingHint);
     document.getElementById('allocGroup').addEventListener('change', () => refreshSubLocationSelect('allocGroup', 'allocSubLocation'));
     document.getElementById('retGroup').addEventListener('change', () => refreshSubLocationSelect('retGroup', 'retSubLocation'));
+    document.getElementById('editAllocGroup').addEventListener('change', () => refreshSubLocationSelect('editAllocGroup', 'editAllocSubLocation'));
+    document.getElementById('editRetGroup').addEventListener('change', () => refreshSubLocationSelect('editRetGroup', 'editRetSubLocation'));
 
     document.getElementById('ovSearch').addEventListener('input', renderOverviewList);
     document.getElementById('ovSearchClear').addEventListener('click', () => {
