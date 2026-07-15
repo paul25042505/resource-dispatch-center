@@ -40,6 +40,10 @@ try {
 // v0.0.1～v0.0.20 為採用此規則前的歷史紀錄，版號僅代表累計改版次數，不做語意區分。
 const CHANGELOG = [
     {
+        version: "v2.6.1",
+        notes: "領用簽收原本要手動點選批次才會記錄「跟誰借的」，很容易忘記點，導致總覽頁還是看不出來源。現在物品欄位一填好，系統會直接依入庫先後自動選定一批（可再點選改成別批），不用額外操作就一定會記錄來源，總覽頁展開明細也就一定看得到「來自◯◯」。"
+    },
+    {
         version: "v2.6.0",
         notes: "總覽頁展開明細現在會列出入庫時填寫的備註（先前漏掉沒顯示），領出紀錄若有經過批次選擇，也會標示這批「來自」哪個單位／存放位置，一眼就知道這批東西是跟誰借的。入庫登錄的「入庫同時預劃分配給小組」的經辦／領用人欄位，改成跟其他欄位一樣的搜尋式快捷選單，不用每次手動輸入。順便修正入庫登錄與歸還登記的備註欄位送出後沒有清空、下一筆會不小心沿用到上一筆備註的問題。"
     },
@@ -1030,7 +1034,13 @@ function renderAllocBatchPicker() {
         selectedAllocBatchDocId = null;
         return;
     }
-    if (!batches.some(b => b.docId === selectedAllocBatchDocId)) selectedAllocBatchDocId = null;
+    if (!batches.some(b => b.docId === selectedAllocBatchDocId)) {
+        // 預設自動選第一批（依入庫先後排序，先進先出），這樣就算沒有特別點選
+        // 也一定會記錄這筆是從哪一批領出的；使用者仍可以點別批改選。
+        selectedAllocBatchDocId = batches[0].docId;
+        const qtyEl = document.getElementById('allocQty');
+        if (qtyEl && !qtyEl.value) qtyEl.value = batches[0].remaining;
+    }
 
     wrap.classList.remove('hidden');
     listEl.innerHTML = batches.map(b => {
