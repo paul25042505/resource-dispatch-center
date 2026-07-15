@@ -40,6 +40,10 @@ try {
 // v0.0.1～v0.0.20 為採用此規則前的歷史紀錄，版號僅代表累計改版次數，不做語意區分。
 const CHANGELOG = [
     {
+        version: "v2.2.0",
+        notes: "總覽頁「庫房待發」列現在會直接標示這批物資是🌐外部借入還是🏠自有／存放位置，同一物品若兩種來源都有會同時顯示兩個圖示，不用點開就能一眼看出來；點開展開後的每筆入庫明細也會分別標示來源類型。沒有記錄來源類型的舊資料則維持原樣，不會顯示錯誤的標示。"
+    },
+    {
         version: "v2.1.0",
         notes: "總覽頁點開一列展開後，每一筆逐筆明細（入庫／領出／歸還）都新增「⋮」，可直接編輯或刪除那筆原始紀錄，跟入庫來源紀錄／領用紀錄／歸還紀錄共用同一套編輯彈窗與底部操作選單，不用再跑去「原始紀錄」區塊才能改。"
     },
@@ -939,7 +943,14 @@ function allocReturnEvents(allocs, rets) {
 }
 
 function sourceEvents(sources) {
-    return sources.map(s => ({ ts: s.timestamp, icon: '📥', verb: '入庫', qty: s.qty, handler: s.source, serial: s.serial, collection: 'sources', docId: s.docId }));
+    return sources.map(s => {
+        const originLabel = s.sourceType === 'own' ? '自有／存放位置' : s.sourceType === 'external' ? '外部借入' : '';
+        return {
+            ts: s.timestamp, icon: '📥', verb: '入庫', qty: s.qty, handler: s.source, serial: s.serial,
+            collection: 'sources', docId: s.docId,
+            originIcon: originLabel ? sourceTypeIcon(s.sourceType) : '', originLabel
+        };
+    });
 }
 
 // 把一組事件整理成「最新異動日期」＋「逐筆明細 HTML」，保管中／全部歷史／庫房待發列共用；
@@ -949,8 +960,9 @@ function buildCustodyDetail(events) {
     const latestDate = sorted.length ? formatTimestamp(sorted[0].ts) : '-';
     const detailHtml = sorted.map(e => {
         const serial = formatSerial(e.serial);
+        const origin = e.originIcon ? ` ${e.originIcon}${e.originLabel}` : '';
         return `<div class="flex items-center gap-1.5">
-            <span class="flex-1">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${e.icon} ${e.verb} <b>${e.qty}</b>（${escapeHtml(e.handler)}）・${formatTimestamp(e.ts)}${e.note ? `・備註：${escapeHtml(e.note)}` : ''}</span>
+            <span class="flex-1">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${e.icon} ${e.verb}${origin} <b>${e.qty}</b>（${escapeHtml(e.handler)}）・${formatTimestamp(e.ts)}${e.note ? `・備註：${escapeHtml(e.note)}` : ''}</span>
             <button type="button" class="record-menu-btn qp-icon-btn text-[var(--brown-500)] shrink-0" data-collection="${e.collection}" data-id="${e.docId}">⋮</button>
         </div>`;
     }).join('') || `<div class="text-[var(--brown-300)]">尚無詳細紀錄</div>`;
@@ -990,8 +1002,9 @@ function renderOverviewActiveRows(itemName, groupFilter) {
         const remaining = getItemRemaining(itemName);
         if (remaining > 0) {
             const itemSrcs = rawSources.filter(s => s.item === itemName);
+            const originIcons = Array.from(new Set(itemSrcs.filter(s => s.sourceType === 'own' || s.sourceType === 'external').map(s => sourceTypeIcon(s.sourceType)))).join('');
             rows.push(overviewRowHtml({
-                icon: '📦', label: '庫房待發',
+                icon: '📦', label: originIcons ? `庫房待發 ${originIcons}` : '庫房待發',
                 rightHtml: `<b class="stat-value text-[var(--brown-700)] shrink-0">${remaining}</b>`,
                 events: sourceEvents(itemSrcs)
             }));
