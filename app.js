@@ -40,6 +40,10 @@ try {
 // v0.0.1～v0.0.20 為採用此規則前的歷史紀錄，版號僅代表累計改版次數，不做語意區分。
 const CHANGELOG = [
     {
+        version: "v2.5.0",
+        notes: "領用簽收新增「點選要從哪一批領出」：物品欄位一填好，下面會列出目前還有剩的入庫批次（標示來源單位、入庫時間、剩餘數量），點一批就自動帶入該批剩餘數量，送出時會記住這筆領用是從哪一批扣的。總覽頁「庫房待發」展開後的原始紀錄，之後只要是透過批次選擇領出的，會直接標示這批「剩餘◯件」，不會再只顯示入庫當下的原始數量誤導判斷。（舊資料因為沒有記錄是從哪一批領出，暫時無法回溯標示，維持顯示原始數量。）"
+    },
+    {
         version: "v2.4.1",
         notes: "修正搜尋欄位（物品／單位／領用人／點收人）在輸入較長文字時，右側的✕清除按鈕會跑到卡片外面的排版問題。總覽頁的物品名稱標題改成加大、加粗的字體，比較容易一眼找到要的物品。"
     },
@@ -193,6 +197,8 @@ let rawSources = [], rawAllocations = [], rawReturns = [], rawGroups = [], rawQu
 const UNASSIGNED_SUBLOCATION = '__unassigned__';
 // 目前專案底下所有 onSnapshot 的取消訂閱函式；切換／離開專案時務必全部呼叫，避免重複監聽。
 let projectListeners = [];
+// 領用簽收表單目前點選的入庫批次（sources 的 docId）；null＝沒有指定批次（一般領用）
+let selectedAllocBatchDocId = null;
 
 window.addEventListener('DOMContentLoaded', async () => {
     updateConnectionStatusUI();
@@ -935,6 +941,35 @@ function getItemRemaining(itemName) {
     return totalA - totalB + totalC;
 }
 
+// 某一筆入庫批次目前還剩多少（原始數量 - 從這一批指名領出的數量）。
+// 領用簽收如果沒有指定批次（例如舊資料），不會計入這裡，所以這個數字只對
+// 「有經過批次選擇領出」的資料準確；沒有被指名領出的部分算在總覽的
+// 「未指定批次」可用庫存裡，見 getUnassignedRemaining()。
+function getBatchRemaining(sourceDocId) {
+    const source = rawSources.find(s => s.docId === sourceDocId);
+    if (!source) return 0;
+    const consumed = rawAllocations.reduce((sum, a) =>
+        sum + (a.sourceBatches || []).filter(sb => sb.sourceDocId === sourceDocId).reduce((s, sb) => s + sb.qty, 0), 0);
+    return source.qty - consumed;
+}
+
+// 該物品目前每一批還有剩的入庫紀錄（給領用簽收的「選擇批次」清單用），依單號（入庫先後）排序
+function getAvailableBatches(itemName) {
+    return rawSources
+        .filter(s => s.item === itemName)
+        .map(s => ({ ...s, remaining: getBatchRemaining(s.docId) }))
+        .filter(s => s.remaining > 0)
+        .sort((a, b) => (a.serial ?? 0) - (b.serial ?? 0));
+}
+
+// 該物品目前庫房剩餘中，扣掉所有「有指名是哪一批」的剩餘量之後，還有多少是
+// 「歸還／舊資料」等沒有指定批次來源的可用庫存
+function getUnassignedRemaining(itemName) {
+    const remaining = getItemRemaining(itemName);
+    const batchTotal = getAvailableBatches(itemName).reduce((sum, s) => sum + s.remaining, 0);
+    return remaining - batchTotal;
+}
+
 // 某物品在某小組（可選：某個使用場地）名下的所有領用/歸還原始紀錄
 // subLocationFilter 不傳＝不篩選場地；傳 UNASSIGNED_SUBLOCATION＝只算未指定場地的部分
 function getCustodyRecords(itemName, groupId, subLocationFilter) {
@@ -970,6 +1005,42 @@ function updateAllocStockHint() {
     const remaining = getItemRemaining(itemName);
     el.textContent = `📦 目前庫房剩餘：${remaining} 件`;
     el.className = `text-xs font-bold mt-1.5 min-h-[1em] ${remaining > 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+}
+
+// 領用簽收表單：物品欄位一有值就列出目前還有剩的入庫批次，點選哪一批就記錄
+// 起來（送出時會存進 allocations 的 sourceBatches），讓總覽頁的「原始紀錄」
+// 展開明細能準確顯示每一批還剩多少，而不是只顯示入庫當下的原始數量。
+function renderAllocBatchPicker() {
+    const wrap = document.getElementById('allocBatchPickerWrap');
+    const listEl = document.getElementById('allocBatchPicker');
+    if (!wrap || !listEl) return;
+    const itemName = document.getElementById('allocItem').value.trim();
+    const batches = itemName ? getAvailableBatches(itemName) : [];
+
+    if (!itemName || batches.length === 0) {
+        wrap.classList.add('hidden');
+        listEl.innerHTML = '';
+        selectedAllocBatchDocId = null;
+        return;
+    }
+    if (!batches.some(b => b.docId === selectedAllocBatchDocId)) selectedAllocBatchDocId = null;
+
+    wrap.classList.remove('hidden');
+    listEl.innerHTML = batches.map(b => {
+        const originIcon = b.sourceType ? sourceTypeIcon(b.sourceType) : '';
+        const selected = b.docId === selectedAllocBatchDocId;
+        return `<button type="button" class="ios-list-row alloc-batch-row w-full text-left${selected ? ' is-selected' : ''}" data-doc-id="${b.docId}" data-remaining="${b.remaining}">
+            <span class="flex-1 text-sm truncate">${originIcon} <b class="text-[var(--brown-800)]">${escapeHtml(b.source)}</b> <span class="text-[10px] text-[var(--brown-400)]">${formatTimestamp(b.timestamp)}</span></span>
+            <span class="qp-chip-stock shrink-0">剩${b.remaining}</span>
+        </button>`;
+    }).join('');
+    listEl.querySelectorAll('.alloc-batch-row').forEach(btn => {
+        btn.onclick = () => {
+            selectedAllocBatchDocId = btn.dataset.docId;
+            document.getElementById('allocQty').value = btn.dataset.remaining;
+            renderAllocBatchPicker();
+        };
+    });
 }
 
 function updateRetOutstandingHint() {
@@ -1008,7 +1079,8 @@ function sourceEvents(sources) {
         return {
             ts: s.timestamp, icon: '📥', verb: '入庫', qty: s.qty, handler: s.source, serial: s.serial,
             collection: 'sources', docId: s.docId,
-            originIcon: originLabel ? sourceTypeIcon(s.sourceType) : '', originLabel
+            originIcon: originLabel ? sourceTypeIcon(s.sourceType) : '', originLabel,
+            remaining: getBatchRemaining(s.docId)
         };
     });
 }
@@ -1021,8 +1093,11 @@ function buildCustodyDetail(events) {
     const detailHtml = sorted.map(e => {
         const serial = formatSerial(e.serial);
         const origin = e.originIcon ? ` ${e.originIcon}${e.originLabel}` : '';
+        const remainingBadge = (e.collection === 'sources' && typeof e.remaining === 'number' && e.remaining !== e.qty)
+            ? (e.remaining > 0 ? `・<span class="text-emerald-700 font-bold">剩餘${e.remaining}</span>` : `・<span class="text-[var(--brown-300)]">已領完</span>`)
+            : '';
         return `<div class="flex items-center gap-1.5">
-            <span class="flex-1">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${e.icon} ${e.verb}${origin} <b>${e.qty}</b>（${escapeHtml(e.handler)}）・${formatTimestamp(e.ts)}${e.note ? `・備註：${escapeHtml(e.note)}` : ''}</span>
+            <span class="flex-1">${serial ? `<b class="text-[var(--brown-500)]">${serial}</b> ` : ''}${e.icon} ${e.verb}${origin} <b>${e.qty}</b>（${escapeHtml(e.handler)}）${remainingBadge}・${formatTimestamp(e.ts)}${e.note ? `・備註：${escapeHtml(e.note)}` : ''}</span>
             <button type="button" class="record-menu-btn qp-icon-btn text-[var(--brown-500)] shrink-0" data-collection="${e.collection}" data-id="${e.docId}">⋮</button>
         </div>`;
     }).join('') || `<div class="text-[var(--brown-300)]">尚無詳細紀錄</div>`;
@@ -1149,6 +1224,7 @@ function renderOverviewList() {
 // 沿用舊函式名稱，減少呼叫端（各 onSnapshot 監聽器）需要調整的範圍
 function calculateAndRenderInventory() {
     updateAllocStockHint();
+    renderAllocBatchPicker();
     updateRetOutstandingHint();
     renderQuickpickSuggestions();
     renderOverviewList();
@@ -1610,7 +1686,11 @@ function bindGlobalEvents() {
     });
     document.getElementById('btnAddSplitRow').onclick = addSplitRow;
 
-    document.getElementById('allocItem').addEventListener('input', updateAllocStockHint);
+    document.getElementById('allocItem').addEventListener('input', () => {
+        selectedAllocBatchDocId = null;
+        updateAllocStockHint();
+        renderAllocBatchPicker();
+    });
     document.getElementById('retItem').addEventListener('input', updateRetOutstandingHint);
     document.getElementById('retGroup').addEventListener('change', updateRetOutstandingHint);
 
@@ -1676,14 +1756,14 @@ function bindGlobalEvents() {
         }
 
         const serial = await getNextSerialNumber();
-        await addDoc(collection(db, 'projects', currentProjectId, 'sources'), { item, sourceType, source, qty, method, note, serial, timestamp: new Date() });
+        const sourceDocRef = await addDoc(collection(db, 'projects', currentProjectId, 'sources'), { item, sourceType, source, qty, method, note, serial, timestamp: new Date() });
         await ensureQuickpick('item', item);
         await ensureQuickpick(sourceType === 'own' ? 'source_own' : 'source_external', source);
 
         if (splitEnabled) {
             for (const r of splitRows) {
                 const allocSerial = await getNextSerialNumber();
-                await addDoc(collection(db, 'projects', currentProjectId, 'allocations'), { item, groupId: r.groupId, subLocationId: '', qty: r.qty, user: splitUser, serial: allocSerial, timestamp: new Date() });
+                await addDoc(collection(db, 'projects', currentProjectId, 'allocations'), { item, groupId: r.groupId, subLocationId: '', qty: r.qty, user: splitUser, serial: allocSerial, sourceBatches: [{ sourceDocId: sourceDocRef.id, qty: r.qty }], timestamp: new Date() });
             }
             await ensureQuickpick('person', splitUser);
         }
@@ -1705,17 +1785,28 @@ function bindGlobalEvents() {
         const user = document.getElementById('allocUser').value.trim();
         if (!item || isNaN(qty) || !user) return alert("填寫不完整");
 
-        const remaining = getItemRemaining(item);
-        if (qty > remaining) {
-            if (!confirm(`目前庫房剩餘只有 ${remaining} 件「${item}」，仍要領用 ${qty} 件嗎？`)) return;
+        const sourceBatches = [];
+        if (selectedAllocBatchDocId) {
+            const batchRemaining = getBatchRemaining(selectedAllocBatchDocId);
+            if (qty > batchRemaining) {
+                if (!confirm(`這一批「${item}」只剩 ${batchRemaining} 件，仍要領用 ${qty} 件嗎？（超過的部分不會歸屬到這一批）`)) return;
+            }
+            sourceBatches.push({ sourceDocId: selectedAllocBatchDocId, qty: Math.min(qty, batchRemaining) });
+        } else {
+            const remaining = getItemRemaining(item);
+            if (qty > remaining) {
+                if (!confirm(`目前庫房剩餘只有 ${remaining} 件「${item}」，仍要領用 ${qty} 件嗎？`)) return;
+            }
         }
 
         const serial = await getNextSerialNumber();
-        await addDoc(collection(db, 'projects', currentProjectId, 'allocations'), { item, groupId, subLocationId, qty, user, serial, timestamp: new Date() });
+        await addDoc(collection(db, 'projects', currentProjectId, 'allocations'), { item, groupId, subLocationId, qty, user, serial, sourceBatches, timestamp: new Date() });
         await ensureQuickpick('item', item);
         await ensureQuickpick('person', user);
         document.getElementById('allocItem').value = ''; document.getElementById('allocQty').value = '';
+        selectedAllocBatchDocId = null;
         updateAllocStockHint();
+        renderAllocBatchPicker();
         renderQuickpickSuggestions();
     };
 
