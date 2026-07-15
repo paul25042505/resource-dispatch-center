@@ -156,30 +156,7 @@ h1, h2, h3, .card-header {
 }
 .qp-icon-btn:active { transform: scale(0.88); background: rgba(216,188,133,0.6); transition: transform .08s ease-out; }
 
-/* 快速選取膠囊按鈕（取代下拉選單） */
-.qp-chip {
-    min-height: 36px;
-    padding: 0.4rem 0.8rem;
-    border-radius: 999px;
-    background: rgba(243,228,198,0.6);
-    border: 1px solid rgba(216,188,133,0.5);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    color: var(--brown-700);
-    font-size: 0.78rem;
-    font-weight: 700;
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    transition: transform 0.35s var(--spring), filter .1s ease, background .15s ease;
-}
-.qp-chip:active { transform: scale(0.94); transition: transform 0.08s ease-out; }
-.qp-chip.is-selected {
-    background: linear-gradient(160deg, rgba(181,101,29,0.92), rgba(149,78,19,0.88));
-    border-color: var(--clay-dark);
-    color: var(--cream);
-}
+/* 快捷選項的庫存數字小徽章（用於搜尋建議清單的每一列） */
 .qp-chip-stock {
     background: var(--brown-900);
     color: var(--cream);
@@ -188,7 +165,10 @@ h1, h2, h3, .card-header {
     padding: 0.05rem 0.4rem;
     border-radius: 999px;
 }
-.qp-chip.is-selected .qp-chip-stock { background: rgba(0,0,0,0.25); }
+.ios-list-row.is-selected {
+    background: linear-gradient(160deg, rgba(181,101,29,0.16), rgba(149,78,19,0.12));
+}
+.ios-list-row.is-selected .qp-chip-stock { background: rgba(84,51,25,0.35); }
 
 /* 借用報表/總覽明細展開列 */
 .plain-details > summary { list-style: none; cursor: pointer; }

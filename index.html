@@ -44,6 +44,11 @@ v2.3.0 - 入庫登錄新增「入庫同時預劃分配給小組」選項：勾�
          40個劃給教管組），不用入庫完再跑三次領用簽收。這些分配一開始不會
          指定使用場地（東西仍算留在庫房，只是先登記要給誰），之後實際搬到
          場地時再從紀錄的「⋮」編輯補上使用場地即可。
+v2.4.0 - 入庫登錄／領用簽收／歸還登記的物品、單位／領用人／點收人欄位，全面改成
+         搜尋欄：輸入時即時篩選快捷選項，找不到符合的會提示「送出後會自動
+         新增」，不用另外操作。下方選項改成上下捲動列表，預設顯示前 5 項，
+         超過用捲動查看其餘的。物品欄位跟下一個欄位（單位／小組）之間加上
+         一條分隔線區分兩個區塊。
 v0.0.1 - 全新古早味鄉村風 UI/UX 改版；標題更名為「資源調度所」；改為手機優先版面，
          新增底部導覽列與上方子選單列；按鈕與輸入框觸控面積調整至 44x44px 以上；
          物資總表在手機版改為卡片式檢視以提升可讀性；任務列表新增手機卡片版；
@@ -164,7 +169,7 @@ v0.0.20 - 全站字體調整為更有空間感的排版：本文行高與字距�
                 <span id="connDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span id="connText">雲端資料庫已連線</span>
             </div>
-            <button id="btnShowChangelog" class="version-badge px-2 py-1 rounded-md hover:brightness-95">v2.3.0</button>
+            <button id="btnShowChangelog" class="version-badge px-2 py-1 rounded-md hover:brightness-95">v2.4.0</button>
         </div>
     </header>
 
@@ -376,21 +381,28 @@ v0.0.20 - 全站字體調整為更有空間感的排版：本文行高與字距�
                 </h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
                     <div>
-                        <input type="text" id="srcItem" placeholder="物品(如:無線電)" class="field">
+                        <div class="ios-search">
+                            <span class="ios-search-icon">🔍</span>
+                            <input type="text" id="srcItem" placeholder="搜尋或輸入物品（如:無線電）" autocomplete="off">
+                            <span class="ios-search-clear" id="srcItemClear">✕</span>
+                        </div>
                         <div id="qpBlock-srcItem" class="hidden mt-1.5">
-                            <div class="text-[10px] font-bold text-[var(--brown-400)] mb-1 flex items-center gap-1"><span>📋</span><span>點一下快速帶入</span></div>
-                            <div id="qpSelect-srcItem" class="flex gap-1.5 overflow-x-auto pb-0.5"></div>
+                            <div id="qpSelect-srcItem" class="ios-list max-h-60 overflow-y-auto"></div>
                         </div>
                     </div>
+                    <div class="border-t border-dashed border-[var(--tan-300)] md:hidden"></div>
                     <select id="srcType" class="field">
                         <option value="external">🌐 外部借入（跟外單位借）</option>
                         <option value="own">🏠 自有物資（本單位既有）</option>
                     </select>
                     <div>
-                        <input type="text" id="srcUnit" placeholder="外部單位名稱(如:302旅)" class="field">
+                        <div class="ios-search">
+                            <span class="ios-search-icon">🔍</span>
+                            <input type="text" id="srcUnit" placeholder="搜尋或輸入外部單位名稱（如:302旅）" autocomplete="off">
+                            <span class="ios-search-clear" id="srcUnitClear">✕</span>
+                        </div>
                         <div id="qpBlock-srcUnit" class="hidden mt-1.5">
-                            <div class="text-[10px] font-bold text-[var(--brown-400)] mb-1 flex items-center gap-1"><span>📋</span><span>點一下快速帶入</span></div>
-                            <div id="qpSelect-srcUnit" class="flex gap-1.5 overflow-x-auto pb-0.5"></div>
+                            <div id="qpSelect-srcUnit" class="ios-list max-h-60 overflow-y-auto"></div>
                         </div>
                     </div>
                     <input type="number" inputmode="numeric" id="srcQty" placeholder="數量" min="1" class="field">
@@ -424,23 +436,30 @@ v0.0.20 - 全站字體調整為更有空間感的排版：本文行高與字距�
                 </h3>
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
                     <div>
-                        <input type="text" id="allocItem" placeholder="物品名稱" class="field">
+                        <div class="ios-search">
+                            <span class="ios-search-icon">🔍</span>
+                            <input type="text" id="allocItem" placeholder="搜尋或輸入物品名稱" autocomplete="off">
+                            <span class="ios-search-clear" id="allocItemClear">✕</span>
+                        </div>
                         <div id="qpBlock-allocItem" class="hidden mt-1.5">
-                            <div class="text-[10px] font-bold text-[var(--brown-400)] mb-1 flex items-center gap-1"><span>📋</span><span>點一下快速帶入</span></div>
-                            <div id="qpSelect-allocItem" class="flex gap-1.5 overflow-x-auto pb-0.5"></div>
+                            <div id="qpSelect-allocItem" class="ios-list max-h-60 overflow-y-auto"></div>
                         </div>
                         <p id="allocItemStock" class="text-xs font-bold mt-1.5 min-h-[1em]"></p>
                     </div>
+                    <div class="border-t border-dashed border-[var(--tan-300)] md:hidden"></div>
                     <div>
                         <select id="allocGroup" class="field"></select>
                         <select id="allocSubLocation" class="field mt-1.5 hidden"></select>
                     </div>
                     <input type="number" inputmode="numeric" id="allocQty" placeholder="數量" min="1" class="field">
                     <div>
-                        <input type="text" id="allocUser" placeholder="領用人簽名" class="field">
+                        <div class="ios-search">
+                            <span class="ios-search-icon">🔍</span>
+                            <input type="text" id="allocUser" placeholder="搜尋或輸入領用人簽名" autocomplete="off">
+                            <span class="ios-search-clear" id="allocUserClear">✕</span>
+                        </div>
                         <div id="qpBlock-allocUser" class="hidden mt-1.5">
-                            <div class="text-[10px] font-bold text-[var(--brown-400)] mb-1 flex items-center gap-1"><span>📋</span><span>點一下快速帶入</span></div>
-                            <div id="qpSelect-allocUser" class="flex gap-1.5 overflow-x-auto pb-0.5"></div>
+                            <div id="qpSelect-allocUser" class="ios-list max-h-60 overflow-y-auto"></div>
                         </div>
                     </div>
                     <button id="btnAllocSubmit" class="btn md:col-span-4 w-full md:w-auto ml-auto block" style="background:#2563eb;color:var(--cream);">確認發放</button>
@@ -453,12 +472,16 @@ v0.0.20 - 全站字體調整為更有空間感的排版：本文行高與字距�
                 </h3>
                 <div class="grid grid-cols-1 md:grid-cols-5 gap-3 bg-[var(--tan-100)] p-4 rounded-xl border border-[var(--tan-300)]">
                     <div>
-                        <input type="text" id="retItem" placeholder="物品名稱" class="field">
+                        <div class="ios-search">
+                            <span class="ios-search-icon">🔍</span>
+                            <input type="text" id="retItem" placeholder="搜尋或輸入物品名稱" autocomplete="off">
+                            <span class="ios-search-clear" id="retItemClear">✕</span>
+                        </div>
                         <div id="qpBlock-retItem" class="hidden mt-1.5">
-                            <div class="text-[10px] font-bold text-[var(--brown-400)] mb-1 flex items-center gap-1"><span>📋</span><span>點一下快速帶入</span></div>
-                            <div id="qpSelect-retItem" class="flex gap-1.5 overflow-x-auto pb-0.5"></div>
+                            <div id="qpSelect-retItem" class="ios-list max-h-60 overflow-y-auto"></div>
                         </div>
                     </div>
+                    <div class="border-t border-dashed border-[var(--tan-300)] md:hidden"></div>
                     <div>
                         <select id="retGroup" class="field"></select>
                         <select id="retSubLocation" class="field mt-1.5 hidden"></select>
@@ -466,10 +489,13 @@ v0.0.20 - 全站字體調整為更有空間感的排版：本文行高與字距�
                     </div>
                     <input type="number" inputmode="numeric" id="retQty" placeholder="數量" min="1" class="field">
                     <div>
-                        <input type="text" id="retReceiver" placeholder="收回點收人" class="field">
+                        <div class="ios-search">
+                            <span class="ios-search-icon">🔍</span>
+                            <input type="text" id="retReceiver" placeholder="搜尋或輸入收回點收人" autocomplete="off">
+                            <span class="ios-search-clear" id="retReceiverClear">✕</span>
+                        </div>
                         <div id="qpBlock-retReceiver" class="hidden mt-1.5">
-                            <div class="text-[10px] font-bold text-[var(--brown-400)] mb-1 flex items-center gap-1"><span>📋</span><span>點一下快速帶入</span></div>
-                            <div id="qpSelect-retReceiver" class="flex gap-1.5 overflow-x-auto pb-0.5"></div>
+                            <div id="qpSelect-retReceiver" class="ios-list max-h-60 overflow-y-auto"></div>
                         </div>
                     </div>
                     <input type="text" id="retNote" placeholder="物品損壞狀況備註" class="field">

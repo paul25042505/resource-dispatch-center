@@ -40,6 +40,10 @@ try {
 // v0.0.1～v0.0.20 為採用此規則前的歷史紀錄，版號僅代表累計改版次數，不做語意區分。
 const CHANGELOG = [
     {
+        version: "v2.4.0",
+        notes: "入庫登錄／領用簽收／歸還登記的物品、單位／領用人／點收人欄位，全面改成搜尋欄：輸入時即時篩選快捷選項，找不到符合的會提示「送出後會自動新增」，不用另外操作。下方選項改成上下捲動列表，預設顯示前 5 項，超過用捲動查看其餘的。物品欄位跟下一個欄位（單位／小組）之間加上一條分隔線區分兩個區塊。"
+    },
+    {
         version: "v2.3.0",
         notes: "入庫登錄新增「入庫同時預劃分配給小組」選項：勾選後可以在同一次送出裡，把剛入庫的數量直接拆分給多個小組（例如入庫100個，60個先劃給行政組、40個劃給教管組），不用入庫完再跑三次領用簽收。這些分配一開始不會指定使用場地（東西仍算留在庫房，只是先登記要給誰），之後實際搬到場地時再從紀錄的「⋮」編輯補上使用場地即可。"
     },
@@ -410,7 +414,7 @@ function enterProject(projectId, projectName) {
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'quickpicks'), (snap) => {
         rawQuickpicks = [];
         snap.forEach(d => rawQuickpicks.push({ docId: d.id, ...d.data() }));
-        renderAllChips();
+        renderQuickpickSuggestions();
         renderQuickpickSettings();
     }, (err) => firestoreErrorMessage('讀取快捷選項', err)));
     projectListeners.push(onSnapshot(collection(db, 'projects', projectId, 'sublocations'), (snap) => {
@@ -792,25 +796,41 @@ function quickpicksByCategory(category) {
     return rawQuickpicks.filter(q => q.category === category).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
-function renderAllChips() {
+// 物品/單位/人員欄位的搜尋建議清單：輸入時即時篩選，找不到符合的就提示「送出後會自動新增」
+function renderQuickpickSuggestions() {
     QP_FIELD_BINDINGS.forEach(({ inputId, selectId, category, showStock }) => {
-        const row = document.getElementById(selectId);
-        if (!row) return;
+        const listEl = document.getElementById(selectId);
+        const input = document.getElementById(inputId);
+        if (!listEl || !input) return;
         const block = document.getElementById(`qpBlock-${inputId}`);
         const resolvedCategory = typeof category === 'function' ? category() : category;
-        const items = quickpicksByCategory(resolvedCategory);
-        if (block) block.classList.toggle('hidden', items.length === 0);
-        const input = document.getElementById(inputId);
-        row.innerHTML = items.map(q => {
+        const allItems = quickpicksByCategory(resolvedCategory);
+        const searchText = input.value.trim();
+        const filteredItems = searchText
+            ? allItems.filter(q => q.value.toLowerCase().includes(searchText.toLowerCase()))
+            : allItems;
+
+        if (block) block.classList.toggle('hidden', allItems.length === 0 && !searchText);
+
+        if (filteredItems.length === 0) {
+            listEl.innerHTML = searchText
+                ? `<div class="ios-list-row"><span class="text-xs text-[var(--brown-400)]">➕ 沒有符合「${escapeHtml(searchText)}」的選項，送出後會自動新增</span></div>`
+                : `<div class="ios-list-row"><span class="text-xs text-[var(--brown-300)]">尚無快捷選項，直接輸入即可自動新增</span></div>`;
+            return;
+        }
+
+        listEl.innerHTML = filteredItems.map(q => {
             const stock = showStock ? getItemRemaining(q.value) : null;
-            const selected = input && input.value.trim() === q.value;
-            return `<button type="button" class="qp-chip shrink-0${selected ? ' is-selected' : ''}" data-value="${escapeHtml(q.value)}">${escapeHtml(q.value)}${stock !== null ? ` <span class="qp-chip-stock">${stock}</span>` : ''}</button>`;
+            const selected = searchText === q.value;
+            return `<button type="button" class="ios-list-row qp-suggest-row w-full text-left${selected ? ' is-selected' : ''}" data-value="${escapeHtml(q.value)}">
+                <span class="flex-1 text-sm font-bold text-[var(--brown-800)] truncate">${escapeHtml(q.value)}</span>
+                ${stock !== null ? `<span class="qp-chip-stock shrink-0">${stock}</span>` : ''}
+            </button>`;
         }).join('');
-        row.querySelectorAll('.qp-chip').forEach(btn => {
+        listEl.querySelectorAll('.qp-suggest-row').forEach(btn => {
             btn.onclick = () => {
                 input.value = btn.dataset.value;
                 input.dispatchEvent(new Event('input', { bubbles: true }));
-                row.querySelectorAll('.qp-chip').forEach(b => b.classList.toggle('is-selected', b === btn));
             };
         });
     });
@@ -1126,7 +1146,7 @@ function renderOverviewList() {
 function calculateAndRenderInventory() {
     updateAllocStockHint();
     updateRetOutstandingHint();
-    renderAllChips();
+    renderQuickpickSuggestions();
     renderOverviewList();
 }
 
@@ -1577,7 +1597,7 @@ function bindGlobalEvents() {
         const input = document.getElementById('srcUnit');
         input.placeholder = e.target.value === 'own' ? '存放位置(如:衛生器材室、A棟2樓)' : '外部單位名稱(如:302旅)';
         updateMethodWrapVisibility('srcMethodWrap', e.target.value);
-        renderAllChips();
+        renderQuickpickSuggestions();
     });
 
     document.getElementById('srcSplitToggle').addEventListener('change', (e) => {
@@ -1589,6 +1609,20 @@ function bindGlobalEvents() {
     document.getElementById('allocItem').addEventListener('input', updateAllocStockHint);
     document.getElementById('retItem').addEventListener('input', updateRetOutstandingHint);
     document.getElementById('retGroup').addEventListener('change', updateRetOutstandingHint);
+
+    ['srcItem', 'srcUnit', 'allocItem', 'allocUser', 'retItem', 'retReceiver'].forEach(id => {
+        const input = document.getElementById(id);
+        const clearBtn = document.getElementById(`${id}Clear`);
+        input.addEventListener('input', () => {
+            input.closest('.ios-search')?.classList.toggle('has-text', !!input.value.trim());
+            renderQuickpickSuggestions();
+        });
+        clearBtn.addEventListener('click', () => {
+            input.value = '';
+            input.focus();
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    });
     document.getElementById('allocGroup').addEventListener('change', () => refreshSubLocationSelect('allocGroup', 'allocSubLocation'));
     document.getElementById('retGroup').addEventListener('change', () => refreshSubLocationSelect('retGroup', 'retSubLocation'));
     document.getElementById('editAllocGroup').addEventListener('change', () => refreshSubLocationSelect('editAllocGroup', 'editAllocSubLocation'));
@@ -1654,6 +1688,7 @@ function bindGlobalEvents() {
         document.getElementById('srcMethodOther').value = ''; document.getElementById('srcMethodOther').classList.add('hidden');
         document.getElementById('srcMethod').value = '借據';
         resetSplitForm();
+        renderQuickpickSuggestions();
         showToast(splitEnabled ? '✅ 登錄完成，已預劃分配' : '✅ 登錄完成');
     };
 
@@ -1677,6 +1712,7 @@ function bindGlobalEvents() {
         await ensureQuickpick('person', user);
         document.getElementById('allocItem').value = ''; document.getElementById('allocQty').value = '';
         updateAllocStockHint();
+        renderQuickpickSuggestions();
     };
 
     document.getElementById('btnRetSubmit').onclick = async () => {
@@ -1701,6 +1737,7 @@ function bindGlobalEvents() {
         await ensureQuickpick('person', receiver);
         document.getElementById('retItem').value = ''; document.getElementById('retQty').value = '';
         updateRetOutstandingHint();
+        renderQuickpickSuggestions();
     };
 
     document.querySelectorAll('.btn-add-qp').forEach(b => {
