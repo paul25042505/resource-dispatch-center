@@ -40,6 +40,10 @@ try {
 // v0.0.1～v0.0.20 為採用此規則前的歷史紀錄，版號僅代表累計改版次數，不做語意區分。
 const CHANGELOG = [
     {
+        version: "v2.6.0",
+        notes: "總覽頁展開明細現在會列出入庫時填寫的備註（先前漏掉沒顯示），領出紀錄若有經過批次選擇，也會標示這批「來自」哪個單位／存放位置，一眼就知道這批東西是跟誰借的。入庫登錄的「入庫同時預劃分配給小組」的經辦／領用人欄位，改成跟其他欄位一樣的搜尋式快捷選單，不用每次手動輸入。順便修正入庫登錄與歸還登記的備註欄位送出後沒有清空、下一筆會不小心沿用到上一筆備註的問題。"
+    },
+    {
         version: "v2.5.0",
         notes: "領用簽收新增「點選要從哪一批領出」：物品欄位一填好，下面會列出目前還有剩的入庫批次（標示來源單位、入庫時間、剩餘數量），點一批就自動帶入該批剩餘數量，送出時會記住這筆領用是從哪一批扣的。總覽頁「庫房待發」展開後的原始紀錄，之後只要是透過批次選擇領出的，會直接標示這批「剩餘◯件」，不會再只顯示入庫當下的原始數量誤導判斷。（舊資料因為沒有記錄是從哪一批領出，暫時無法回溯標示，維持顯示原始數量。）"
     },
@@ -185,7 +189,8 @@ const QP_FIELD_BINDINGS = [
     { inputId: "allocItem", selectId: "qpSelect-allocItem", category: "item", showStock: true },
     { inputId: "allocUser", selectId: "qpSelect-allocUser", category: "person", showStock: false },
     { inputId: "retItem", selectId: "qpSelect-retItem", category: "item", showStock: true },
-    { inputId: "retReceiver", selectId: "qpSelect-retReceiver", category: "person", showStock: false }
+    { inputId: "retReceiver", selectId: "qpSelect-retReceiver", category: "person", showStock: false },
+    { inputId: "srcSplitUser", selectId: "qpSelect-srcSplitUser", category: "person", showStock: false }
 ];
 
 // ---- 全域狀態 ----
@@ -762,7 +767,9 @@ function addSplitRow() {
 function resetSplitForm() {
     document.getElementById('srcSplitToggle').checked = false;
     document.getElementById('srcSplitWrap').classList.add('hidden');
-    document.getElementById('srcSplitUser').value = '';
+    const splitUserInput = document.getElementById('srcSplitUser');
+    splitUserInput.value = '';
+    splitUserInput.dispatchEvent(new Event('input', { bubbles: true }));
     document.getElementById('srcSplitRows').innerHTML = '';
 }
 
@@ -1066,9 +1073,29 @@ function timestampToDate(ts) {
     return ts && typeof ts.toDate === 'function' ? ts.toDate() : (ts instanceof Date ? ts : null);
 }
 
+// 領出紀錄如果有記錄是從哪一批入庫扣的（sourceBatches），回推出「跟誰借的」；
+// 沒有批次資訊的舊資料無法回推，回傳 null 就不顯示。
+function describeAllocOrigin(sourceBatches) {
+    if (!sourceBatches || sourceBatches.length === 0) return null;
+    const batchSources = sourceBatches
+        .map(sb => rawSources.find(s => s.docId === sb.sourceDocId))
+        .filter(Boolean);
+    if (batchSources.length === 0) return null;
+    const names = Array.from(new Set(batchSources.map(s => s.source)));
+    const icons = Array.from(new Set(batchSources.map(s => sourceTypeIcon(s.sourceType))));
+    return { icon: icons.join(''), label: `來自${names.join('、')}` };
+}
+
 function allocReturnEvents(allocs, rets) {
     return [
-        ...allocs.map(a => ({ ts: a.timestamp, icon: '📤', verb: '領出', qty: a.qty, handler: a.user, serial: a.serial, collection: 'allocations', docId: a.docId })),
+        ...allocs.map(a => {
+            const origin = describeAllocOrigin(a.sourceBatches);
+            return {
+                ts: a.timestamp, icon: '📤', verb: '領出', qty: a.qty, handler: a.user, serial: a.serial,
+                collection: 'allocations', docId: a.docId,
+                originIcon: origin ? origin.icon : '', originLabel: origin ? origin.label : ''
+            };
+        }),
         ...rets.map(r => ({ ts: r.timestamp, icon: '📋', verb: '歸還', qty: r.qty, handler: r.receiver, serial: r.serial, note: r.note, collection: 'returns', docId: r.docId }))
     ];
 }
@@ -1077,7 +1104,7 @@ function sourceEvents(sources) {
     return sources.map(s => {
         const originLabel = s.sourceType === 'own' ? '自有／存放位置' : s.sourceType === 'external' ? '外部借入' : '';
         return {
-            ts: s.timestamp, icon: '📥', verb: '入庫', qty: s.qty, handler: s.source, serial: s.serial,
+            ts: s.timestamp, icon: '📥', verb: '入庫', qty: s.qty, handler: s.source, serial: s.serial, note: s.note,
             collection: 'sources', docId: s.docId,
             originIcon: originLabel ? sourceTypeIcon(s.sourceType) : '', originLabel,
             remaining: getBatchRemaining(s.docId)
@@ -1694,7 +1721,7 @@ function bindGlobalEvents() {
     document.getElementById('retItem').addEventListener('input', updateRetOutstandingHint);
     document.getElementById('retGroup').addEventListener('change', updateRetOutstandingHint);
 
-    ['srcItem', 'srcUnit', 'allocItem', 'allocUser', 'retItem', 'retReceiver'].forEach(id => {
+    ['srcItem', 'srcUnit', 'allocItem', 'allocUser', 'retItem', 'retReceiver', 'srcSplitUser'].forEach(id => {
         const input = document.getElementById(id);
         const clearBtn = document.getElementById(`${id}Clear`);
         input.addEventListener('input', () => {
@@ -1771,6 +1798,7 @@ function bindGlobalEvents() {
         document.getElementById('srcItem').value = ''; document.getElementById('srcQty').value = '';
         document.getElementById('srcMethodOther').value = ''; document.getElementById('srcMethodOther').classList.add('hidden');
         document.getElementById('srcMethod').value = '借據';
+        document.getElementById('srcNote').value = '';
         resetSplitForm();
         renderQuickpickSuggestions();
         showToast(splitEnabled ? '✅ 登錄完成，已預劃分配' : '✅ 登錄完成');
@@ -1831,6 +1859,7 @@ function bindGlobalEvents() {
         await ensureQuickpick('item', item);
         await ensureQuickpick('person', receiver);
         document.getElementById('retItem').value = ''; document.getElementById('retQty').value = '';
+        document.getElementById('retNote').value = '';
         updateRetOutstandingHint();
         renderQuickpickSuggestions();
     };
